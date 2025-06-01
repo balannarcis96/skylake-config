@@ -1,0 +1,98 @@
+//!
+//! \file skl_config
+//!
+//! \license Licensed under the MIT License. See LICENSE for details.
+//!
+#pragma once
+#include <memory>
+#include <filesystem>
+#include <fstream>
+
+#include <skl_log>
+#include <skl_string_view>
+
+#include <nlohmann/json.hpp>
+
+#include "skl_config_internal/field.hpp"
+
+#define SKL_LOG_TAG "[ConfigNode<T>] -- "
+
+namespace skl {
+using json = nlohmann::json;
+
+template <config::CConfigTargetType _TargetConfig>
+class ConfigNode : public config::Field {
+public:
+    using field_t = config::ConfigField<_TargetConfig>;
+
+    ConfigNode() noexcept
+        : Field(nullptr, "__root__") { }
+
+    template <config::CValueFieldType _Field>
+    config::ValueField<_Field, _TargetConfig>& value(skl_string_view f_field_name, config::ValueField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::ValueField<_Field, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::ValueField<_Field, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CValueFieldType _Field, u32 _N>
+    config::ValueField<_Field, _TargetConfig>& value(const char (&f_field_name)[_N], config::ValueField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+        return value<_Field>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
+    // template <typename _ArrayItem>
+    // void array(ConfigNode<_ArrayItem>&& f_array_item, skl_string_view f_field_name, member_ptr_t<_FieldType> f_member_ptr) noexcept {
+    // }
+
+    // template <typename _Object>
+    // void object(ConfigNode<_Object>&& f_object, skl_string_view f_field_name, member_ptr_t<_FieldType> f_member_ptr) noexcept {
+    // }
+
+    void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {
+        load_from_file(f_file);
+        validate_and_submit(f_out_config);
+    }
+
+private:
+    void load(json& f_json) {
+        for (auto& field : m_fields) {
+            field->load(f_json);
+        }
+    }
+
+    void load_from_file(skl::skl_string_view f_json_file) {
+        if (false == std::filesystem::exists(f_json_file.std<std::string_view>())) {
+            SERROR_LOCAL_T("File \"{}\" does not exist!", f_json_file);
+            throw std::runtime_error("File doesn't exists");
+        }
+
+        std::string file_name{};
+        file_name += f_json_file.std<std::string_view>();
+        std::ifstream file{file_name};
+        if ((false == file.is_open()) || file.bad()) {
+            SERROR_LOCAL_T("Failed to open \"{}\" file!", f_json_file);
+            throw std::runtime_error("File open failed");
+        }
+
+        json j = json::parse(file);
+        load(j);
+    }
+
+    void validate_and_submit(_TargetConfig& f_out_config) {
+        for (auto& field : m_fields) {
+            field->validate_and_submit(f_out_config);
+        }
+    }
+
+private:
+    std::vector<std::unique_ptr<config::ConfigField<_TargetConfig>>> m_fields;
+};
+
+} // namespace skl
+#undef SKL_LOG_TAG

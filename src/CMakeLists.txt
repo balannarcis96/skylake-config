@@ -10,11 +10,11 @@ file(GLOB_RECURSE _SKL_CONFIG_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/source/*
 add_library(${PROJECT_NAME} STATIC ${_SKL_CONFIG_SOURCE_FILES})
 
 target_include_directories(${PROJECT_NAME}
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    PUBLIC SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/include"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/source")
 
 # Link Skylake Core lib
-target_link_libraries(${PROJECT_NAME} PUBLIC libskl-core-cfg)
+target_link_libraries(${PROJECT_NAME} PUBLIC libskl-core-cfg nlohmann_json)
 
 # Remove default prefix
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")

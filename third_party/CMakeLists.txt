@@ -6,4 +6,6 @@ cmake_minimum_required(VERSION 4.0.0)
 
 add_subdirectory(skylake-core)
 
-add_subdirectory(json)
+if(NOT TARGET nlohmann_json)
+    add_subdirectory(json)
+endif()

@@ -13,40 +13,40 @@ A fluent‐builder JSON configuration library
 
 ```cpp
 {
-    ConfigBuilder<MyConfig> root{};
-    ConfigBuilder<MySubConfig> sub{};
+    struct MyConfigRoot {
+        u8                        field_u8;
+        i32                       field_int;
+        float                     field_float;
+        double                    field_double;
+        std::string               field_str;
+        skl_fixed_vector<i32, 32> field_list_i32;
+    };
 
-    builder.field<i32>("json_filed_name")
-        .required(true)
-        .add_constraint<MinMaxConstraint>(0, 500)
-        .add_constraint<PowerOf2>(23)
-        .bind(&MySubConfig::field);
+    //...
 
-    builder.field<i32>("json_optional_filed_name")
-        .required(false)
-        .default(0)
-        .add_constraint<MinMaxConstraint>(0, 500)
-        .add_constraint<PowerOf2>(23)
-        .bind(&MySubConfig::field2);
+    ConfigNode<MyConfigRoot> root;
 
-    root.field<std::string>("json_field_name")
-        .add_constraint<Predicate>([](json& field) -> bool {
-            //custom validation logic
-        })
-        .bind_custom([](const std::string& value, MyConfig& config) {
-            config.my_field = value + "_test_";
-        });
+    root.value<u8>("u82", &MyConfigRoot::field_u8)
+        .default_value(23);
 
-    root.array(sub, "json_array_field_name")
-        .required(true)
-        .bind(&MySubConfig::vector_like_field);
+    root.value<i32>("i32", &MyConfigRoot::field_int)
+        .default_value(-501)
+        .min_max(-500, 500);
 
-    //1. First build
-    const auto result = root.build();
+    root.value<float>("float", &MyConfigRoot::field_float);
 
-    //2. Validate and store
-    MyConfig config{};
-    const auto result = root.read_json("path");
-    const auto result = root.validate_and_store(config);
+    root.value<std::string>("str2", &MyConfigRoot::field_str)
+        .default_value("[default]")
+        .min_max_length(1, 23);
+
+    root.value<double>("double", &MyConfigRoot::field_double);
+
+    MyConfigRoot config{};
+    
+    try {
+        root.load_validate_and_submit(skl_string_view::from_cstr(json_path), config);
+    } catch (const std::exception& f_ex) {
+        (void)printf("Failed to load config from workbench.json!\n\terr-> %s\n", f_ex.what());
+    }
 }
 ```
