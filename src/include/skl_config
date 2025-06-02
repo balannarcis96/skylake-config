@@ -103,16 +103,6 @@ public:
         return value<_Field>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
     }
 
-    // template <typename _ArrayItem>
-    // void array(ConfigNode<_ArrayItem>&& f_array_item, skl_string_view f_field_name, member_ptr_t<_FieldType> f_member_ptr) noexcept {
-    // }
-
-    void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {
-        load_from_file(f_file);
-        validate();
-        submit(f_out_config);
-    }
-
     template <config::CConfigTargetType _ChildTargetConfig>
     config::ObjectField<_ChildTargetConfig, _TargetConfig>& object(skl_string_view                                                      f_field_name,
                                                                    config::ObjectField<_ChildTargetConfig, _TargetConfig>::member_ptr_t f_member_ptr,
@@ -171,6 +161,12 @@ public:
                                                                              config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>::member_ptr_t f_member_ptr,
                                                                              ConfigNode<_ChildTargetConfig>&&                                                f_config) {
         return array<_ChildTargetConfig, _Container>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, std::move(f_config));
+    }
+
+    void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {
+        load_from_file(f_file);
+        validate();
+        submit(f_out_config);
     }
 
 private:

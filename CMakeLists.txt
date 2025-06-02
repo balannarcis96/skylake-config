@@ -25,11 +25,6 @@ endif()
 # Private SkylakeCore library
 skl_CreateSkylakeCoreLibTarget("libskl-core-cfg" "")
 
-# Add SkylakeConfig presets
-skl_add_presets_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/presets/dev_presets.json")
-skl_add_presets_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/presets/qa_presets.json")
-skl_add_presets_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/presets/prod_presets.json")
-
 add_subdirectory(src)
 
 if(PROJECT_IS_TOP_LEVEL)
