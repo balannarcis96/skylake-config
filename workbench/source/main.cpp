@@ -2,15 +2,16 @@
 
 using namespace skl;
 
-struct MyChildConfig {
-    struct Inner {
-        float       field_float;
-        std::string field_str;
-    };
-
+struct Inner {
     float       field_float;
     std::string field_str;
-    Inner       field_inner;
+};
+
+struct MyChildConfig {
+
+    float              field_float;
+    std::string        field_str;
+    std::vector<Inner> field_inner;
 };
 
 struct MyConfigRoot {
@@ -66,23 +67,22 @@ i32 main(i32 f_argc, const char** f_argv) {
     });
 
     {
-        auto inner_config = ConfigNode<MyChildConfig::Inner>();
-        inner_config.value<float>("float", &MyChildConfig::Inner::field_float)
+        auto inner_config = ConfigNode<Inner>();
+        inner_config.value<float>("float", &Inner::field_float)
             .default_value(-12.245f);
 
-        inner_config.value<std::string>("string", &MyChildConfig::Inner::field_str)
-            .default_value("--str--")
-            .add_constraint([](auto& self, const std::string& f_value) static noexcept -> bool {
-            if (f_value != "--str--") {
-                SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
-                return false;
-            }
+        inner_config.value<std::string>("string", &Inner::field_str)
+            .default_value("--str--");
 
-            return true;
-        });
-
-        child_config.object<MyChildConfig::Inner>("inner_obj", &MyChildConfig::field_inner, std::move(inner_config))
-            .required(true);
+        child_config.array<Inner>("inner_obj", &MyChildConfig::field_inner, std::move(inner_config))
+            .min_length(1U)
+            .default_value({
+                Inner{.field_float = 1},
+                Inner{.field_float = 2},
+                Inner{.field_float = 3},
+                Inner{.field_float = 4},
+                Inner{.field_float = 5},
+            });
     }
 
     root.object("obj", &MyConfigRoot::field_obj, child_config)
@@ -92,8 +92,6 @@ i32 main(i32 f_argc, const char** f_argv) {
         .required(true);
 
     MyConfigRoot config{};
-
-    config.field_double = 12124;
 
     try {
         root.load_validate_and_submit(skl_string_view::from_cstr(json_path), config);

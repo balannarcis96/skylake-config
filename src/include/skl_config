@@ -18,7 +18,7 @@
 #include "skl_config_internal/array_field.hpp"
 #include "skl_config_internal/object_field.hpp"
 
-#define SKL_LOG_TAG "[ConfigNode<T>] -- "
+#define SKL_LOG_TAG ""
 
 namespace skl {
 using json = nlohmann::json;
@@ -143,6 +143,36 @@ public:
         return object<_ChildTargetConfig>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, std::move(f_config));
     }
 
+    template <config::CConfigTargetType _ChildTargetConfig, template <typename> typename _Container = std::vector>
+    config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>& array(skl_string_view                                                                 f_field_name,
+                                                                             config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>::member_ptr_t f_member_ptr,
+                                                                             ConfigNode<_ChildTargetConfig>                                                  f_config) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        f_config.set_parent(f_field_name.std<std::string_view>(), *this);
+        m_fields.emplace_back(std::make_unique<config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>>(this, f_field_name.std<std::string_view>(), f_member_ptr, std::move(f_config)));
+        return static_cast<config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>&>(*m_fields.back());
+    }
+
+    template <config::CConfigTargetType _ChildTargetConfig, template <typename> typename _Container = std::vector, u32 _N>
+    config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>& array(const char (&f_field_name)[_N],
+                                                                             config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>::member_ptr_t f_member_ptr,
+                                                                             const ConfigNode<_ChildTargetConfig>&                                           f_config) {
+        return array<_ChildTargetConfig, _Container>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, f_config);
+    }
+
+    template <config::CConfigTargetType _ChildTargetConfig, template <typename> typename _Container = std::vector, u32 _N>
+    config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>& array(const char (&f_field_name)[_N],
+                                                                             config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>::member_ptr_t f_member_ptr,
+                                                                             ConfigNode<_ChildTargetConfig>&&                                                f_config) {
+        return array<_ChildTargetConfig, _Container>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, std::move(f_config));
+    }
+
 private:
     void load(json& f_json) {
         bool failed = false;
@@ -214,6 +244,9 @@ private:
 
     template <config::CConfigTargetType, config::CConfigTargetType>
     friend class config::ObjectField;
+
+    template <config::CConfigTargetType, config::CConfigTargetType, template <typename> typename>
+    friend class config::ArrayField;
 
     template <config::CConfigTargetType>
     friend class ConfigNode;

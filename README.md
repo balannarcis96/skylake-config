@@ -30,15 +30,16 @@ A fluent‐builder JSON configuration library
 
 using namespace skl;
 
-struct MyChildConfig {
-    struct Inner {
-        float       field_float;
-        std::string field_str;
-    };
-
+struct Inner {
     float       field_float;
     std::string field_str;
-    Inner       field_inner;
+};
+
+struct MyChildConfig {
+
+    float             field_float;
+    std::string       field_str;
+    skl_vector<Inner> field_inner;
 };
 
 struct MyConfigRoot {
@@ -88,23 +89,22 @@ i32 main(i32 f_argc, const char** f_argv) {
     });
 
     {
-        auto inner_config = ConfigNode<MyChildConfig::Inner>();
-        inner_config.value<float>("float", &MyChildConfig::Inner::field_float)
+        auto inner_config = ConfigNode<Inner>();
+        inner_config.value<float>("float", &Inner::field_float)
             .default_value(-12.245f);
 
-        inner_config.value<std::string>("string", &MyChildConfig::Inner::field_str)
-            .default_value("--str--")
-            .add_constraint([](auto& self, const std::string& f_value) static noexcept -> bool {
-            if (f_value != "--str--") {
-                SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
-                return false;
-            }
+        inner_config.value<std::string>("string", &Inner::field_str)
+            .default_value("--str--");
 
-            return true;
-        });
-
-        child_config.object<MyChildConfig::Inner>("inner_obj", &MyChildConfig::field_inner, std::move(inner_config))
-            .required(true);
+        child_config.array<Inner>("inner_obj", &MyChildConfig::field_inner, std::move(inner_config))
+            .min_length(1U)
+            .default_value({
+                Inner{.field_float = 1},
+                Inner{.field_float = 2},
+                Inner{.field_float = 3},
+                Inner{.field_float = 4},
+                Inner{.field_float = 5},
+            });
     }
 
     root.object("obj", &MyConfigRoot::field_obj, child_config)
@@ -134,6 +134,7 @@ i32 main(i32 f_argc, const char** f_argv) {
 [ERROR  ][...] -- Field "__root__:double" has an invalid double value("Asdas")! Min[2.2250738585072014e-308] Max[1.7976931348623157e+308]
 [ERROR  ][...] -- Field "__root__:obj2:float" has an invalid float value("22.22,")! Min[1.1754944e-38] Max[3.4028235e+38]
 [ERROR  ][...] -- Field "__root__:obj2:inner_obj:float" has an invalid float value("asdasdasd")! Min[1.1754944e-38] Max[3.4028235e+38]
+[ERROR  ][...] -- Array field "__root__:obj2:inner_obj" elements count must be in [min=1, max=4294967295]!
 Failed to load config from workbench.json!
 ```
 - Here the **`__root__`** represents the json root unnamed object ```{ ... }```.

@@ -1,22 +1,31 @@
 {
-    "u8": "asd",
+    "u8": 12,
     "i32": -255,
-    "float": "Asd",
-    "double": "Asdas",
+    "float": 1251,
+    "double": 1214,
     "obj": {
         "float": 22.22,
         "string": "--str--",
-        "inner_obj": {
-            "float": 33.33
-        }
+        "inner_obj": [
+            {
+                "float": 10.1
+            },
+            {
+                "float": 11.6
+            },
+            {
+                "float": 12.5
+            }
+        ]
     },
     "obj2": {
-        "float": "22.22,",
+        "float": 1251,
         "string": "--str--",
-        "inner_obj": {
-            "float": "asdasdasd",
-            "string": "--str--2"
-        }
+        "inner_obj": [
+            {
+                "float": 10.5
+            }
+        ]
     },
     "childern": [
         {
