@@ -4,6 +4,7 @@
 //! \license Licensed under the MIT License. See LICENSE for details.
 //!
 #pragma once
+
 #include <memory>
 #include <filesystem>
 #include <fstream>
@@ -13,7 +14,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "skl_config_internal/field.hpp"
+#include "skl_config_internal/value_field.hpp"
+#include "skl_config_internal/array_field.hpp"
+#include "skl_config_internal/object_field.hpp"
 
 #define SKL_LOG_TAG "[ConfigNode<T>] -- "
 
@@ -21,12 +24,66 @@ namespace skl {
 using json = nlohmann::json;
 
 template <config::CConfigTargetType _TargetConfig>
-class ConfigNode : public config::Field {
+class ConfigNode final : public config::Field {
 public:
     using field_t = config::ConfigField<_TargetConfig>;
 
     ConfigNode() noexcept
         : Field(nullptr, "__root__") { }
+
+    ~ConfigNode() override = default;
+
+    ConfigNode(const ConfigNode& f_other)
+        : config::Field(f_other) {
+        m_fields.reserve(f_other.m_fields.size());
+
+        for (const auto& field : f_other.m_fields) {
+            auto clone = field->clone();
+            clone->update_parent(*this);
+            m_fields.emplace_back(std::move(clone));
+        }
+    }
+
+    ConfigNode& operator=(const ConfigNode& f_other) {
+        if (&f_other == this) {
+            return *this;
+        }
+
+        m_fields.clear();
+        m_fields.reserve(f_other.m_fields.size());
+
+        for (const auto& field : f_other.m_fields) {
+            auto clone = field->clone();
+            clone->update_parent(*this);
+            m_fields.emplace_back(std::move(clone));
+        }
+
+        return *this;
+    }
+
+    ConfigNode(ConfigNode&& f_other) noexcept
+        : config::Field(std::move(f_other))
+        , m_fields(std::move(f_other.m_fields)) {
+
+        for (auto& field : m_fields) {
+            field->update_parent(*this);
+        }
+    }
+
+    ConfigNode& operator=(ConfigNode&& f_other) noexcept {
+        if (&f_other == this) {
+            return *this;
+        }
+
+        m_fields.clear();
+        m_fields = std::move(f_other.m_fields);
+
+        for (auto& field : m_fields) {
+            field->update_parent(*this);
+        }
+
+        return *this;
+    }
 
     template <config::CValueFieldType _Field>
     config::ValueField<_Field, _TargetConfig>& value(skl_string_view f_field_name, config::ValueField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
@@ -50,19 +107,55 @@ public:
     // void array(ConfigNode<_ArrayItem>&& f_array_item, skl_string_view f_field_name, member_ptr_t<_FieldType> f_member_ptr) noexcept {
     // }
 
-    // template <typename _Object>
-    // void object(ConfigNode<_Object>&& f_object, skl_string_view f_field_name, member_ptr_t<_FieldType> f_member_ptr) noexcept {
-    // }
-
     void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {
         load_from_file(f_file);
-        validate_and_submit(f_out_config);
+        validate();
+        submit(f_out_config);
+    }
+
+    template <config::CConfigTargetType _ChildTargetConfig>
+    config::ObjectField<_ChildTargetConfig, _TargetConfig>& object(skl_string_view                                                      f_field_name,
+                                                                   config::ObjectField<_ChildTargetConfig, _TargetConfig>::member_ptr_t f_member_ptr,
+                                                                   ConfigNode<_ChildTargetConfig>                                       f_config) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        f_config.set_parent(f_field_name.std<std::string_view>(), *this);
+        m_fields.emplace_back(std::make_unique<config::ObjectField<_ChildTargetConfig, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr, std::move(f_config)));
+        return static_cast<config::ObjectField<_ChildTargetConfig, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CConfigTargetType _ChildTargetConfig, u32 _N>
+    config::ObjectField<_ChildTargetConfig, _TargetConfig>& object(const char (&f_field_name)[_N],
+                                                                   config::ObjectField<_ChildTargetConfig, _TargetConfig>::member_ptr_t f_member_ptr,
+                                                                   const ConfigNode<_ChildTargetConfig>&                                f_config) {
+        return object<_ChildTargetConfig>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, f_config);
+    }
+
+    template <config::CConfigTargetType _ChildTargetConfig, u32 _N>
+    config::ObjectField<_ChildTargetConfig, _TargetConfig>& object(const char (&f_field_name)[_N],
+                                                                   config::ObjectField<_ChildTargetConfig, _TargetConfig>::member_ptr_t f_member_ptr,
+                                                                   ConfigNode<_ChildTargetConfig>&&                                     f_config) {
+        return object<_ChildTargetConfig>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, std::move(f_config));
     }
 
 private:
     void load(json& f_json) {
+        bool failed = false;
         for (auto& field : m_fields) {
-            field->load(f_json);
+            try {
+                field->load(f_json);
+            } catch (const std::exception& f_ex) {
+                failed = true;
+            }
+        }
+
+        if (failed) {
+            throw std::runtime_error("Load failed for config!");
         }
     }
 
@@ -84,15 +177,48 @@ private:
         load(j);
     }
 
-    void validate_and_submit(_TargetConfig& f_out_config) {
+    void validate() {
+        bool failed = false;
         for (auto& field : m_fields) {
-            field->validate_and_submit(f_out_config);
+            try {
+                field->validate();
+            } catch (const std::exception& f_ex) {
+                failed = true;
+            }
+        }
+
+        if (failed) {
+            throw std::runtime_error("Validaton failed for config!");
+        }
+    }
+
+    void submit(_TargetConfig& f_out_config) {
+        for (auto& field : m_fields) {
+            field->submit(f_out_config);
+        }
+    }
+
+    void set_parent(std::string_view f_field_name, config::Field& f_parent) noexcept {
+        this->m_name   = f_field_name;
+        this->m_parent = &f_parent;
+    }
+
+    void load_fields_from_default_object(const _TargetConfig& f_config) {
+        for (auto& field : m_fields) {
+            field->load_value_from_default_object(f_config);
         }
     }
 
 private:
     std::vector<std::unique_ptr<config::ConfigField<_TargetConfig>>> m_fields;
+
+    template <config::CConfigTargetType, config::CConfigTargetType>
+    friend class config::ObjectField;
+
+    template <config::CConfigTargetType>
+    friend class ConfigNode;
 };
 
 } // namespace skl
+
 #undef SKL_LOG_TAG

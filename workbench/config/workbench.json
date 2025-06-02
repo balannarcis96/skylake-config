@@ -1,6 +1,31 @@
 {
-    "u8": 25522,
+    "u8": "asd",
     "i32": -255,
-    "float": 24.55,
-    "double": 24.6161
+    "float": "Asd",
+    "double": "Asdas",
+    "obj": {
+        "float": 22.22,
+        "string": "--str--",
+        "inner_obj": {
+            "float": 33.33
+        }
+    },
+    "obj2": {
+        "float": "22.22,",
+        "string": "--str--",
+        "inner_obj": {
+            "float": "asdasdasd",
+            "string": "--str--2"
+        }
+    },
+    "childern": [
+        {
+            "float": 25151.141,
+            "list": [
+                123,
+                -124,
+                155
+            ]
+        }
+    ]
 }
