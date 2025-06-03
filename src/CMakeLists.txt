@@ -11,7 +11,7 @@ target_include_directories(${PROJECT_NAME}
     INTERFACE SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 # Link Skylake Core lib
-target_link_libraries(${PROJECT_NAME} INTERFACE libskl-core-cfg nlohmann_json)
+target_link_libraries(${PROJECT_NAME} INTERFACE ${SKL_CONFIG_SKL_CORE_TARGET} nlohmann_json)
 
 # Remove default prefix
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")

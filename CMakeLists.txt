@@ -11,19 +11,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 set(SKL_CONFIG_ENABLE_TESTS ON CACHE BOOL "[TopLevel] Enable tests")
 
 if(NOT PROJECT_IS_TOP_LEVEL)
-    set(SKL_CORE_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-else()
-    set(SKL_CONFIG_PRIVATE_CORE_LIB ON)
+    set(SKL_CONFIG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 endif()
 
-add_subdirectory(third_party)
-
-if(TARGET "libskl-core-cfg")
-    message(FATAL_ERROR "SkylakeConfig requires \"libskl-core-cfg\" to not be defined")
-endif()
-
-# Private SkylakeCore library
-skl_CreateSkylakeCoreLibTarget("libskl-core-cfg" "")
+include(SkylakeConfigDeps)
 
 add_subdirectory(src)
 
@@ -33,16 +24,11 @@ if(PROJECT_IS_TOP_LEVEL)
     if(SKL_CONFIG_ENABLE_TESTS)
         # Enable CTest
         enable_testing()
-
+        
+        # Add test module
         include(SkylakeConfigTest)
 
-        # Add the gtest library
-        if(NOT TARGET gtest)
-            set(BUILD_GMOCK OFF)
-            set(INSTALL_GTEST OFF)
-            add_subdirectory(third_party/skylake-core/third_party/googletest)
-        endif()
-
+        # Add tests
         add_subdirectory(test)
     endif()
 endif()
