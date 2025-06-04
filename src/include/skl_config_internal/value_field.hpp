@@ -23,7 +23,6 @@ public:
     ValueField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
         , m_member_ptr(f_member_ptr) {
-        add_default_constraints();
     }
 
     ~ValueField() override                       = default;
@@ -70,7 +69,7 @@ public:
     }
 
     ValueField& min(_Type f_min) noexcept
-        requires(CIntegerValueFieldType<_Type>)
+        requires(CNumericValueFieldType<_Type>)
     {
         add_constraint([f_min](auto& f_self, _Type f_value) {
             if (f_value < f_min) {
@@ -83,7 +82,7 @@ public:
     }
 
     ValueField& max(_Type f_max) noexcept
-        requires(CIntegerValueFieldType<_Type>)
+        requires(CNumericValueFieldType<_Type>)
     {
         add_constraint([f_max](auto& f_self, _Type f_value) {
             if (f_value > f_max) {
@@ -149,8 +148,8 @@ protected:
     void load(json& f_json) override {
         const auto exists = f_json.contains(this->name());
         if (exists) {
-            if constexpr (CIntegerValueFieldType<_Type>) {
-                const auto result = safely_convert_to_integer(f_json[this->name()].dump());
+            if constexpr (CNumericValueFieldType<_Type>) {
+                const auto result = safely_convert_to_numeric(f_json[this->name()].dump());
                 if (false == result.has_value()) {
                     SERROR_LOCAL_T("Field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
                                    this->path_name().c_str(),
@@ -236,8 +235,8 @@ protected:
     }
 
 private:
-    [[nodiscard]] static std::optional<_Type> safely_convert_to_integer(std::string_view f_str)
-        requires(CIntegerValueFieldType<_Type>)
+    [[nodiscard]] static std::optional<_Type> safely_convert_to_numeric(std::string_view f_str)
+        requires(CNumericValueFieldType<_Type>)
     {
         _Type value;
         auto [ptr, ec] = std::from_chars(f_str.data(), f_str.data() + f_str.size(), value);
@@ -246,10 +245,6 @@ private:
         }
 
         return value;
-    }
-
-private:
-    void add_default_constraints() {
     }
 
 private:
