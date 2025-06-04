@@ -210,6 +210,11 @@ private:
             throw std::runtime_error("File doesn't exists");
         }
 
+        if (false == std::filesystem::is_regular_file(f_json_file.std<std::string_view>())) {
+            SERROR_LOCAL_T("File \"{}\" must be a json file!", f_json_file);
+            throw std::runtime_error("Invalid json file");
+        }
+
         std::string file_name{};
         file_name += f_json_file.std<std::string_view>();
         std::ifstream file{file_name};

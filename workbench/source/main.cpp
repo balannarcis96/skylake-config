@@ -39,13 +39,16 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() {
 
     root.value<i32>("i32", &MyConfigRoot::field_int)
         .default_value(-501)
-        .min_max(-500, 500);
+        .power_of_2()
+        .min(-500)
+        .max(500);
 
     root.value<float>("float", &MyConfigRoot::field_float);
 
     root.value<std::string>("str2", &MyConfigRoot::field_str)
         .default_value("[default]")
-        .min_max_length(1, 23);
+        .min_length(1)
+        .max_length(23);
 
     root.value<double>("double", &MyConfigRoot::field_double);
 
@@ -113,7 +116,7 @@ void example_validate_existing_config() {
     MyConfigRoot config{};
 
     config.field_u8     = 55U;
-    config.field_int    = -23;
+    config.field_int    = 32;
     config.field_float  = 12.01f;
     config.field_double = 15.01;
     config.field_str    = "--str--";

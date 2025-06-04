@@ -69,12 +69,12 @@ public:
         return *this;
     }
 
-    ValueField& min_max(_Type f_min, _Type f_max) noexcept
+    ValueField& min(_Type f_min) noexcept
         requires(CIntegerValueFieldType<_Type>)
     {
-        add_constraint([f_min, f_max](auto& f_self, _Type f_value) {
-            if ((f_value < f_min) || (f_value > f_max)) {
-                SERROR("Invalid field \"{}\" value! Min[{}] Max[{}]!", f_self.name_cstr(), f_min, f_max);
+        add_constraint([f_min](auto& f_self, _Type f_value) {
+            if (f_value < f_min) {
+                SERROR("Invalid field \"{}\" value! Min[{}]!", f_self.name_cstr(), f_min);
                 return false;
             }
             return true;
@@ -82,12 +82,51 @@ public:
         return *this;
     }
 
-    ValueField& min_max_length(u32 f_min_length, u32 f_max_length) noexcept
+    ValueField& max(_Type f_max) noexcept
+        requires(CIntegerValueFieldType<_Type>)
+    {
+        add_constraint([f_max](auto& f_self, _Type f_value) {
+            if (f_value > f_max) {
+                SERROR("Invalid field \"{}\" value! Max[{}]!", f_self.name_cstr(), f_max);
+                return false;
+            }
+            return true;
+        });
+        return *this;
+    }
+
+    ValueField& min_length(u32 f_min_length) noexcept
         requires(__is_same(_Type, std::string))
     {
-        add_constraint([f_min_length, f_max_length](auto& f_self, _Type f_value) {
-            if ((f_value.length() < f_min_length) || (f_value.length() > f_max_length)) {
-                SERROR("Invalid string field \"{}\" value length! Min[{}] Max[{}]!", f_self.name_cstr(), f_min_length, f_max_length);
+        add_constraint([f_min_length](auto& f_self, _Type f_value) {
+            if (f_value.length() < f_min_length) {
+                SERROR("Invalid string field \"{}\" value length! Min[{}]!", f_self.name_cstr(), f_min_length);
+                return false;
+            }
+            return true;
+        });
+        return *this;
+    }
+
+    ValueField& max_length(u32 f_max_length) noexcept
+        requires(__is_same(_Type, std::string))
+    {
+        add_constraint([f_max_length](auto& f_self, _Type f_value) {
+            if (f_value.length() > f_max_length) {
+                SERROR("Invalid string field \"{}\" value length! Max[{}]!", f_self.name_cstr(), f_max_length);
+                return false;
+            }
+            return true;
+        });
+        return *this;
+    }
+
+    ValueField& power_of_2() noexcept
+        requires(CIntegerValueFieldType<_Type>)
+    {
+        add_constraint([](auto& f_self, _Type f_value) static {
+            if ((f_value < 2U) || (_Type(0) != ((f_value - _Type(1)) & f_value))) {
+                SERROR("Invalid field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.name_cstr(), f_value);
                 return false;
             }
             return true;

@@ -35,6 +35,11 @@ public:
         return *this;
     }
 
+    ObjectField& default_value(const _Object& f_default) {
+        m_default = f_default;
+        return *this;
+    }
+
     ObjectField& default_value(_Object&& f_default) {
         m_default = std::move(f_default);
         return *this;
