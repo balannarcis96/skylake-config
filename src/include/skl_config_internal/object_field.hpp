@@ -40,6 +40,12 @@ public:
         return *this;
     }
 
+    void reset() override {
+        m_config.reset();
+        m_is_default         = false;
+        m_is_validation_only = false;
+    }
+
 private:
     //! Load the object value from json
     void load(json& f_json) override {
@@ -65,6 +71,8 @@ private:
                 throw std::runtime_error("Missing default value for required object field!");
             }
         }
+
+        m_is_validation_only = false;
     }
 
     //! Validate the field value
@@ -84,7 +92,14 @@ private:
 
     void load_value_from_default_object(const _TargetConfig& f_config) override {
         m_config.load_fields_from_default_object(f_config.*m_member_ptr);
-        m_is_default = true;
+        m_is_default         = true;
+        m_is_validation_only = false;
+    }
+
+    void load_value_for_validation_only(const _TargetConfig& f_config) override {
+        m_config.load_fields_for_validation_only(f_config.*m_member_ptr);
+        m_is_default         = false;
+        m_is_validation_only = true;
     }
 
     std::unique_ptr<ConfigField<_TargetConfig>> clone() override {
@@ -101,8 +116,8 @@ private:
     ConfigNode<_Object>    m_config;
     std::optional<_Object> m_default;
     bool                   m_required{false};
-    bool                   m_validate_if_default{true};
     bool                   m_is_default{false};
+    bool                   m_is_validation_only{false};
 };
 } // namespace skl::config
 

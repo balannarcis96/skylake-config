@@ -53,6 +53,8 @@ public:
         return m_parent->path_name() + ":" + name_cstr();
     }
 
+    virtual void reset() = 0;
+
 protected:
     virtual void update_parent(Field& f_new_parent) noexcept {
         m_parent = &f_new_parent;
@@ -87,6 +89,9 @@ protected:
 
     //! Load value from default object
     virtual void load_value_from_default_object(const _TargetConfig&) = 0;
+
+    //! Load value for validation only
+    virtual void load_value_for_validation_only(const _TargetConfig&) = 0;
 
     //! Clone this field
     virtual std::unique_ptr<ConfigField<_TargetConfig>> clone() = 0;

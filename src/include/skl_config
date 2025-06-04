@@ -167,6 +167,25 @@ public:
         load_from_file(f_file);
         validate();
         submit(f_out_config);
+        reset();
+    }
+
+    void validate_only(const _TargetConfig& f_config) {
+        load_fields_for_validation_only(f_config);
+        validate();
+        reset();
+    }
+
+    //! Reset all the loaded state
+    void reset() override {
+        for (auto& field : m_fields) {
+            field->reset();
+        }
+    }
+
+    //! Clear all configured fields, objects and arrays
+    void clear() {
+        m_fields.clear();
     }
 
 private:
@@ -232,6 +251,12 @@ private:
     void load_fields_from_default_object(const _TargetConfig& f_config) {
         for (auto& field : m_fields) {
             field->load_value_from_default_object(f_config);
+        }
+    }
+
+    void load_fields_for_validation_only(const _TargetConfig& f_config) {
+        for (auto& field : m_fields) {
+            field->load_value_for_validation_only(f_config);
         }
     }
 

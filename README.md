@@ -1,6 +1,6 @@
 # Skylake Config library
 
-A fluent‐builder JSON configuration library
+A fluent‐builder JSON library for loading and validating configuration
 
 # Design points
 - Main goal is at the end of the load and validation the user will have a POD filled with
@@ -123,6 +123,24 @@ i32 main(i32 f_argc, const char** f_argv) {
 
     return 0;
 }
+```
+
+# Validate only
+- The same ConfigNode<T> can be used to validate your, in memory, T config objects
+```cpp
+ConfigNode<T> config{};
+config.value<std::string>("str_field", &T::str_field)
+    .default_value("[default_value]");
+//...
+
+//We can use the config object to validate instances of T
+
+T config_obj{};
+//Setup..
+try{
+    config.validate_only(config_obj);
+}catch(const std::exception& f_ex){}
+
 ```
 
 # Error reporting

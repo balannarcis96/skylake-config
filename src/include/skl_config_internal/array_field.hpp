@@ -12,7 +12,7 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
-template <CConfigTargetType _Object, CConfigTargetType _TargetConfig, template<typename> typename _Container>
+template <CConfigTargetType _Object, CConfigTargetType _TargetConfig, template <typename> typename _Container>
 class ArrayField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t = _Container<_Object> _TargetConfig::*;
@@ -85,6 +85,8 @@ private:
                 throw std::runtime_error("Missing default value for required array field!");
             }
         }
+
+        m_is_validation_only = false;
     }
 
     //! Validate the field value
@@ -133,7 +135,23 @@ private:
             m_entries.back().load_fields_from_default_object(entry);
         }
 
-        m_is_default = true;
+        m_is_default         = true;
+        m_is_validation_only = false;
+    }
+
+    void load_value_for_validation_only(const _TargetConfig& f_config) override {
+        const auto& field = f_config.*m_member_ptr;
+
+        m_entries.clear();
+        m_entries.reserve(field.size());
+
+        for (const auto& entry : field) {
+            m_entries.push_back(m_config);
+            m_entries.back().load_fields_for_validation_only(entry);
+        }
+
+        m_is_default         = false;
+        m_is_validation_only = true;
     }
 
     std::unique_ptr<ConfigField<_TargetConfig>> clone() override {
@@ -149,6 +167,12 @@ private:
         }
     }
 
+    void reset() override {
+        m_entries.clear();
+        m_is_default         = false;
+        m_is_validation_only = false;
+    }
+
 private:
     member_ptr_t                        m_member_ptr;
     ConfigNode<_Object>                 m_config;
@@ -157,8 +181,8 @@ private:
     u32                                 m_min_length = 0U;
     u32                                 m_max_length = std::numeric_limits<u32>::max();
     bool                                m_required{false};
-    bool                                m_validate_if_default{true};
     bool                                m_is_default{false};
+    bool                                m_is_validation_only{false};
 };
 } // namespace skl::config
 

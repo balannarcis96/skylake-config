@@ -100,6 +100,12 @@ public:
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
     }
 
+    void reset() override {
+        m_is_default         = false;
+        m_is_validation_only = false;
+        m_value              = std::nullopt;
+    }
+
 protected:
     void load(json& f_json) override {
         const auto exists = f_json.contains(this->name());
@@ -135,6 +141,8 @@ protected:
                 throw std::runtime_error("Missing default value for required field!");
             }
         }
+
+        m_is_validation_only = false;
     }
 
     void validate() override {
@@ -143,26 +151,24 @@ protected:
             return;
         }
 
-        if ((false == m_is_default) || m_validate_if_default) {
+        if ((false == m_is_default) || m_validate_if_default || false == m_is_validation_only) {
             //Run constraints
             for (const auto& constraint : m_constraints) {
                 if (false == constraint(*this, m_value.value())) {
                     if (m_is_default) {
-                        std::string message = "Invalid default value(";
-                        if constexpr (__is_same(_Type, std::string)) {
-                            message += m_value.value();
+                        if constexpr (__is_same(std::string, _Type)) {
+                            SERROR_LOCAL_T("Invalid default value({}) for field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
                         } else {
-                            message += std::to_string(m_default.value());
+                            SERROR_LOCAL_T("Invalid default value({}) for field\"{}\"!", m_value.value(), this->path_name().c_str());
                         }
-                        message += ") for field \"";
-                        message += this->path_name();
-                        message += "\"!";
-                        throw std::runtime_error(message);
+                        throw std::runtime_error("ValueField<T> Invalid default value");
                     } else {
-                        std::string message  = "Invalid field \"";
-                        message             += this->path_name();
-                        message             += "\"!";
-                        throw std::runtime_error(message);
+                        if constexpr (__is_same(std::string, _Type)) {
+                            SERROR_LOCAL_T("Invalid value({}) for field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
+                        } else {
+                            SERROR_LOCAL_T("Invalid value({}) for field\"{}\"!", m_value.value(), this->path_name().c_str());
+                        }
+                        throw std::runtime_error("ValueField<T> Invalid value");
                     }
                 }
             }
@@ -175,8 +181,15 @@ protected:
     }
 
     void load_value_from_default_object(const _TargetConfig& f_config) override {
-        m_value      = f_config.*m_member_ptr;
-        m_is_default = true;
+        m_value              = f_config.*m_member_ptr;
+        m_is_default         = true;
+        m_is_validation_only = false;
+    }
+
+    void load_value_for_validation_only(const _TargetConfig& f_config) override {
+        m_value              = f_config.*m_member_ptr;
+        m_is_validation_only = true;
+        m_is_default         = false;
     }
 
     std::unique_ptr<ConfigField<_TargetConfig>> clone() override {
@@ -208,6 +221,7 @@ private:
     bool                 m_required{false};
     bool                 m_validate_if_default{true};
     bool                 m_is_default{false};
+    bool                 m_is_validation_only{false};
 
     friend ConfigNode<_TargetConfig>;
 };

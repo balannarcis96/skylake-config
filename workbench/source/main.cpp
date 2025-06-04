@@ -24,16 +24,15 @@ struct MyConfigRoot {
     MyChildConfig field_obj2;
 };
 
-i32 main(i32 f_argc, const char** f_argv) {
-    if (f_argc < 2) {
-        puts("please provide the workbench.json as the only <arg>!");
-        return -1;
+namespace {
+ConfigNode<MyConfigRoot>& example_get_config_loader() {
+    //! Recommended: move to heap, this way it can be freed when not needed
+    static ConfigNode<MyConfigRoot> root;
+    static bool                     built = false;
+
+    if (built) {
+        return root;
     }
-
-    const char* json_path = f_argv[1U];
-    puts(json_path);
-
-    ConfigNode<MyConfigRoot> root;
 
     root.value<u8>("u8", &MyConfigRoot::field_u8)
         .default_value(23);
@@ -91,13 +90,56 @@ i32 main(i32 f_argc, const char** f_argv) {
     root.object("obj2", &MyConfigRoot::field_obj2, std::move(child_config))
         .required(true);
 
+    built = true;
+
+    return root;
+}
+
+void example__load_from_json(const char* f_json_file_path) {
+    puts(f_json_file_path);
+
     MyConfigRoot config{};
 
     try {
-        root.load_validate_and_submit(skl_string_view::from_cstr(json_path), config);
+        auto& root = example_get_config_loader();
+
+        root.load_validate_and_submit(skl_string_view::from_cstr(f_json_file_path), config);
     } catch (const std::exception& f_ex) {
         (void)printf("Failed to load config from workbench.json!\n\terr-> %s\n", f_ex.what());
     }
+}
+
+void example_validate_existing_config() {
+    MyConfigRoot config{};
+
+    config.field_u8     = 55U;
+    config.field_int    = -23;
+    config.field_float  = 12.01f;
+    config.field_double = 15.01;
+    config.field_str    = "--str--";
+
+    config.field_obj.field_str  = "--str--";
+    config.field_obj2.field_str = "--str--";
+
+    config.field_obj.field_inner.push_back({.field_str = "--str--"});
+    config.field_obj2.field_inner.push_back({.field_str = "--str--"});
+
+    try {
+        auto& root = example_get_config_loader();
+
+        root.validate_only(config);
+    } catch (const std::exception& f_ex) {
+        (void)printf("Failed to validate config object!\n");
+    }
+}
+} // namespace
+
+i32 main(i32 f_argc, const char** f_argv) {
+    if (f_argc >= 2) {
+        example__load_from_json(f_argv[1U]);
+    }
+
+    example_validate_existing_config();
 
     return 0;
 }
