@@ -29,6 +29,10 @@ concept CNumericValueFieldType = CIntegerValueFieldType<_Field>
                               || __is_same(_Field, float)
                               || __is_same(_Field, double);
 
+template <typename _Field>
+concept CBooleanValueFieldType = CIntegerValueFieldType<_Field>
+                              || __is_same(_Field, bool);
+
 template <typename _Array>
 struct is_string_buffer {
     static constexpr bool value = false;

@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 
 #include "skl_config_internal/numeric_field.hpp"
+#include "skl_config_internal/boolean_field.hpp"
 #include "skl_config_internal/string_field.hpp"
 #include "skl_config_internal/array_field.hpp"
 #include "skl_config_internal/object_field.hpp"
@@ -86,6 +87,26 @@ public:
         return *this;
     }
 
+    /*=== boolean ===*/
+
+    template <config::CBooleanValueFieldType _Type>
+    config::BooleanField<_Type, _TargetConfig>& boolean(skl_string_view f_field_name, _Type _TargetConfig::* f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::BooleanField<_Type, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::BooleanField<_Type, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CBooleanValueFieldType _Type, u32 _N>
+    config::BooleanField<_Type, _TargetConfig>& boolean(const char (&f_field_name)[_N], _Type _TargetConfig::* f_member_ptr) {
+        return boolean(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
     /*=== char[] ===*/
 
     template <u32 _N>
@@ -130,8 +151,8 @@ public:
 
     /*=== numeric ===*/
 
-    template <config::CNumericValueFieldType _Field>
-    config::NumericField<_Field, _TargetConfig>& numeric(skl_string_view f_field_name, config::NumericField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+    template <config::CNumericValueFieldType _Type>
+    config::NumericField<_Type, _TargetConfig>& numeric(skl_string_view f_field_name, _Type _TargetConfig::* f_member_ptr) {
         for (const auto& field : m_fields) {
             if (field->name() == f_field_name.std<std::string_view>()) {
                 SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
@@ -139,13 +160,13 @@ public:
             }
         }
 
-        m_fields.emplace_back(std::make_unique<config::NumericField<_Field, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
-        return static_cast<config::NumericField<_Field, _TargetConfig>&>(*m_fields.back());
+        m_fields.emplace_back(std::make_unique<config::NumericField<_Type, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::NumericField<_Type, _TargetConfig>&>(*m_fields.back());
     }
 
-    template <config::CNumericValueFieldType _Field, u32 _N>
-    config::NumericField<_Field, _TargetConfig>& numeric(const char (&f_field_name)[_N], config::NumericField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
-        return numeric<_Field>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    template <config::CNumericValueFieldType _Type, u32 _N>
+    config::NumericField<_Type, _TargetConfig>& numeric(const char (&f_field_name)[_N], _Type _TargetConfig::* f_member_ptr) {
+        return numeric<_Type>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
     }
 
     /*=== object ===*/

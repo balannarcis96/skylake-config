@@ -4,6 +4,7 @@
     "float": 1251,
     "double": 1214,
     "str3": "--str3--",
+    "bool": "TRUE",
     "obj": {
         "float": 22.22,
         "string": "--str--",

@@ -31,9 +31,7 @@ public:
     NumericField(NumericField&&) noexcept            = default;
     NumericField& operator=(NumericField&&) noexcept = default;
 
-    NumericField& default_value(_Type f_default) noexcept
-        requires(__is_trivially_copyable(_Type))
-    {
+    NumericField& default_value(_Type f_default) noexcept {
         m_default             = f_default;
         m_validate_if_default = true;
         return *this;
@@ -101,22 +99,19 @@ protected:
     void load(json& f_json) override {
         const auto exists = f_json.contains(this->name());
         if (exists) {
-            if constexpr (CNumericValueFieldType<_Type>) {
-                const auto result = safely_convert_to_numeric(f_json[this->name()].dump());
-                if (false == result.has_value()) {
-                    SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
-                                   this->path_name().c_str(),
-                                   (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
-                                   f_json[this->name()].dump().c_str(),
-                                   std::numeric_limits<_Type>::min(),
-                                   std::numeric_limits<_Type>::max());
-                    throw std::runtime_error("Invalid integer value field!");
-                } else {
-                    m_value = result.value();
-                }
+            const auto result = safely_convert_to_numeric(f_json[this->name()].dump());
+            if (false == result.has_value()) {
+                SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
+                               this->path_name().c_str(),
+                               (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
+                               f_json[this->name()].dump().c_str(),
+                               std::numeric_limits<_Type>::min(),
+                               std::numeric_limits<_Type>::max());
+                throw std::runtime_error("Invalid integer value field!");
             } else {
-                m_value = f_json[this->name()].template get<_Type>();
+                m_value = result.value();
             }
+
             m_is_default = false;
         } else {
             if (m_required) {
@@ -147,18 +142,10 @@ protected:
             for (const auto& constraint : m_constraints) {
                 if (false == constraint(*this, m_value.value())) {
                     if (m_is_default) {
-                        if constexpr (__is_same(std::string, _Type)) {
-                            SERROR_LOCAL_T("Invalid default value({}) for numeric field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
-                        } else {
-                            SERROR_LOCAL_T("Invalid default value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
-                        }
+                        SERROR_LOCAL_T("Invalid default value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
                         throw std::runtime_error("NumericField<T> Invalid default value");
                     } else {
-                        if constexpr (__is_same(std::string, _Type)) {
-                            SERROR_LOCAL_T("Invalid value({}) for numeric field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
-                        } else {
-                            SERROR_LOCAL_T("Invalid value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
-                        }
+                        SERROR_LOCAL_T("Invalid value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
                         throw std::runtime_error("NumericField<T> Invalid value");
                     }
                 }

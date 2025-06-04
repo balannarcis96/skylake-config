@@ -19,6 +19,7 @@ struct MyConfigRoot {
     i32           field_int;
     float         field_float;
     double        field_double;
+    bool          field_bool;
     std::string   field_str;
     MyChildConfig field_obj;
     MyChildConfig field_obj2;
@@ -35,32 +36,36 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         return root;
     }
 
-    root.numeric<u8>("u8", &MyConfigRoot::field_u8)
+    root.numeric("u8", &MyConfigRoot::field_u8)
         .default_value(23);
 
-    root.numeric<i32>("i32", &MyConfigRoot::field_int)
+    root.numeric("i32", &MyConfigRoot::field_int)
         .default_value(-501)
         .power_of_2()
         .min(-500)
         .max(500);
 
-    root.numeric<float>("float", &MyConfigRoot::field_float);
+    root.numeric("float", &MyConfigRoot::field_float);
 
     root.string("str2", &MyConfigRoot::field_str)
         .default_value("[default]")
         .min_length(1)
         .max_length(23);
 
-    root.numeric<double>("double", &MyConfigRoot::field_double);
+    root.numeric("double", &MyConfigRoot::field_double);
 
     root.string("str3", &MyConfigRoot::field_buffer)
         .min_length(4U)
         .truncate_to_buffer(true)
         .default_value("asdas2");
 
+    root.boolean("bool", &MyConfigRoot::field_bool)
+        .interpret_str(true)
+        .interpret_str_true_value("TRUE");
+
     auto child_config = ConfigNode<MyChildConfig>();
 
-    child_config.numeric<float>("float", &MyChildConfig::field_float)
+    child_config.numeric("float", &MyChildConfig::field_float)
         .default_value(-1.245f);
 
     child_config.string("string", &MyChildConfig::field_str)
@@ -76,7 +81,7 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
 
     {
         auto inner_config = ConfigNode<Inner>();
-        inner_config.numeric<float>("float", &Inner::field_float)
+        inner_config.numeric("float", &Inner::field_float)
             .default_value(-12.245f);
 
         inner_config.string("string", &Inner::field_str)
