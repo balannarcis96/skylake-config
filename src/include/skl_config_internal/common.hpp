@@ -29,11 +29,17 @@ concept CNumericValueFieldType = CIntegerValueFieldType<_Field>
                               || __is_same(_Field, float)
                               || __is_same(_Field, double);
 
-template <typename _Field>
-concept CStringValueFieldType = __is_same(_Field, std::string)
-                             || __is_same(_Field, skl_buffer_view);
+template <typename _Array>
+struct is_string_buffer {
+    static constexpr bool value = false;
+};
 
-template <typename _Field>
-concept CValueFieldType = CNumericValueFieldType<_Field>
-                       || CStringValueFieldType<_Field>;
+template <u64 _N>
+struct is_string_buffer<char[_N]> {
+    static constexpr bool value = true;
+};
+
+template <typename _Field, u64 _N = 0ULL>
+concept CStringValueFieldType = __is_same(_Field, std::string)
+                             || is_string_buffer<_Field>::value;
 } // namespace skl::config

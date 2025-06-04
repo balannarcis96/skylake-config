@@ -3,6 +3,7 @@
     "i32": 32,
     "float": 1251,
     "double": 1214,
+    "str3": "--str3--",
     "obj": {
         "float": 22.22,
         "string": "--str--",

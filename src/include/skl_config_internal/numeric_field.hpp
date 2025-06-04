@@ -1,5 +1,5 @@
 //!
-//! \file value_field
+//! \file numeric_field
 //!
 //! \license Licensed under the MIT License. See LICENSE for details.
 //!
@@ -14,24 +14,24 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
-template <CValueFieldType _Type, CConfigTargetType _TargetConfig>
-class ValueField : public ConfigField<_TargetConfig> {
+template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
+class NumericField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t  = _Type _TargetConfig::*;
-    using constraints_t = std::vector<std::function<bool(ValueField<_Type, _TargetConfig>&, const _Type&)>>;
+    using constraints_t = std::vector<std::function<bool(NumericField<_Type, _TargetConfig>&, _Type)>>;
 
-    ValueField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
+    NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
         , m_member_ptr(f_member_ptr) {
     }
 
-    ~ValueField() override                       = default;
-    ValueField(const ValueField&)                = default;
-    ValueField& operator=(const ValueField&)     = default;
-    ValueField(ValueField&&) noexcept            = default;
-    ValueField& operator=(ValueField&&) noexcept = default;
+    ~NumericField() override                         = default;
+    NumericField(const NumericField&)                = default;
+    NumericField& operator=(const NumericField&)     = default;
+    NumericField(NumericField&&) noexcept            = default;
+    NumericField& operator=(NumericField&&) noexcept = default;
 
-    ValueField& default_value(_Type f_default) noexcept
+    NumericField& default_value(_Type f_default) noexcept
         requires(__is_trivially_copyable(_Type))
     {
         m_default             = f_default;
@@ -39,41 +39,21 @@ public:
         return *this;
     }
 
-    ValueField& default_value(_Type f_default, bool f_validate) noexcept
-        requires(__is_trivially_copyable(_Type))
-    {
+    NumericField& default_value(_Type f_default, bool f_validate) noexcept {
         m_default             = f_default;
         m_validate_if_default = f_validate;
         return *this;
     }
 
-    ValueField& default_value(_Type&& default_val)
-        requires(false == __is_trivially_copyable(_Type))
-    {
-        m_default             = std::move(default_val);
-        m_validate_if_default = true;
-        return *this;
-    }
-
-    ValueField& default_value(_Type&& default_val, bool f_validate)
-        requires(false == __is_trivially_copyable(_Type))
-    {
-        m_default             = std::move(default_val);
-        m_validate_if_default = f_validate;
-        return *this;
-    }
-
-    ValueField& required(bool f_required) noexcept {
+    NumericField& required(bool f_required) noexcept {
         m_required = f_required;
         return *this;
     }
 
-    ValueField& min(_Type f_min) noexcept
-        requires(CNumericValueFieldType<_Type>)
-    {
+    NumericField& min(_Type f_min) noexcept {
         add_constraint([f_min](auto& f_self, _Type f_value) {
             if (f_value < f_min) {
-                SERROR("Invalid field \"{}\" value! Min[{}]!", f_self.name_cstr(), f_min);
+                SERROR("Invalid numeric field \"{}\" value! Min[{}]!", f_self.name_cstr(), f_min);
                 return false;
             }
             return true;
@@ -81,51 +61,24 @@ public:
         return *this;
     }
 
-    ValueField& max(_Type f_max) noexcept
-        requires(CNumericValueFieldType<_Type>)
-    {
+    NumericField& max(_Type f_max) noexcept {
         add_constraint([f_max](auto& f_self, _Type f_value) {
             if (f_value > f_max) {
-                SERROR("Invalid field \"{}\" value! Max[{}]!", f_self.name_cstr(), f_max);
+                SERROR("Invalid numeric field \"{}\" value! Max[{}]!", f_self.name_cstr(), f_max);
                 return false;
             }
+
             return true;
         });
         return *this;
     }
 
-    ValueField& min_length(u32 f_min_length) noexcept
-        requires(__is_same(_Type, std::string))
-    {
-        add_constraint([f_min_length](auto& f_self, _Type f_value) {
-            if (f_value.length() < f_min_length) {
-                SERROR("Invalid string field \"{}\" value length! Min[{}]!", f_self.name_cstr(), f_min_length);
-                return false;
-            }
-            return true;
-        });
-        return *this;
-    }
-
-    ValueField& max_length(u32 f_max_length) noexcept
-        requires(__is_same(_Type, std::string))
-    {
-        add_constraint([f_max_length](auto& f_self, _Type f_value) {
-            if (f_value.length() > f_max_length) {
-                SERROR("Invalid string field \"{}\" value length! Max[{}]!", f_self.name_cstr(), f_max_length);
-                return false;
-            }
-            return true;
-        });
-        return *this;
-    }
-
-    ValueField& power_of_2() noexcept
+    NumericField& power_of_2() noexcept
         requires(CIntegerValueFieldType<_Type>)
     {
         add_constraint([](auto& f_self, _Type f_value) static {
             if ((f_value < 2U) || (_Type(0) != ((f_value - _Type(1)) & f_value))) {
-                SERROR("Invalid field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.name_cstr(), f_value);
+                SERROR("Invalid numeric field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.name_cstr(), f_value);
                 return false;
             }
             return true;
@@ -151,7 +104,7 @@ protected:
             if constexpr (CNumericValueFieldType<_Type>) {
                 const auto result = safely_convert_to_numeric(f_json[this->name()].dump());
                 if (false == result.has_value()) {
-                    SERROR_LOCAL_T("Field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
+                    SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
                                    this->path_name().c_str(),
                                    (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
                                    f_json[this->name()].dump().c_str(),
@@ -167,7 +120,7 @@ protected:
             m_is_default = false;
         } else {
             if (m_required) {
-                SERROR_LOCAL_T("Field \"{}\" is required!", this->path_name().c_str());
+                SERROR_LOCAL_T("Numeric field \"{}\" is required!", this->path_name().c_str());
                 throw std::runtime_error("Missing required field!");
             }
 
@@ -175,8 +128,8 @@ protected:
                 m_value      = m_default.value();
                 m_is_default = true;
             } else {
-                SERROR_LOCAL_T("Non required field \"{}\" has no default value!", this->path_name().c_str());
-                throw std::runtime_error("Missing default value for required field!");
+                SERROR_LOCAL_T("Non required numeric field \"{}\" has no default value!", this->path_name().c_str());
+                throw std::runtime_error("Missing default value for required numeric field!");
             }
         }
 
@@ -195,18 +148,18 @@ protected:
                 if (false == constraint(*this, m_value.value())) {
                     if (m_is_default) {
                         if constexpr (__is_same(std::string, _Type)) {
-                            SERROR_LOCAL_T("Invalid default value({}) for field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
+                            SERROR_LOCAL_T("Invalid default value({}) for numeric field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
                         } else {
-                            SERROR_LOCAL_T("Invalid default value({}) for field\"{}\"!", m_value.value(), this->path_name().c_str());
+                            SERROR_LOCAL_T("Invalid default value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
                         }
-                        throw std::runtime_error("ValueField<T> Invalid default value");
+                        throw std::runtime_error("NumericField<T> Invalid default value");
                     } else {
                         if constexpr (__is_same(std::string, _Type)) {
-                            SERROR_LOCAL_T("Invalid value({}) for field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
+                            SERROR_LOCAL_T("Invalid value({}) for numeric field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
                         } else {
-                            SERROR_LOCAL_T("Invalid value({}) for field\"{}\"!", m_value.value(), this->path_name().c_str());
+                            SERROR_LOCAL_T("Invalid value({}) for numeric field\"{}\"!", m_value.value(), this->path_name().c_str());
                         }
-                        throw std::runtime_error("ValueField<T> Invalid value");
+                        throw std::runtime_error("NumericField<T> Invalid value");
                     }
                 }
             }
@@ -231,7 +184,7 @@ protected:
     }
 
     std::unique_ptr<ConfigField<_TargetConfig>> clone() override {
-        return std::make_unique<ValueField<_Type, _TargetConfig>>(*this);
+        return std::make_unique<NumericField<_Type, _TargetConfig>>(*this);
     }
 
 private:

@@ -22,10 +22,11 @@ struct MyConfigRoot {
     std::string   field_str;
     MyChildConfig field_obj;
     MyChildConfig field_obj2;
+    char          field_buffer[8U]{0};
 };
 
 namespace {
-ConfigNode<MyConfigRoot>& example_get_config_loader() {
+ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
     //! Recommended: move to heap, this way it can be freed when not needed
     static ConfigNode<MyConfigRoot> root;
     static bool                     built = false;
@@ -34,32 +35,37 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() {
         return root;
     }
 
-    root.value<u8>("u8", &MyConfigRoot::field_u8)
+    root.numeric<u8>("u8", &MyConfigRoot::field_u8)
         .default_value(23);
 
-    root.value<i32>("i32", &MyConfigRoot::field_int)
+    root.numeric<i32>("i32", &MyConfigRoot::field_int)
         .default_value(-501)
         .power_of_2()
         .min(-500)
         .max(500);
 
-    root.value<float>("float", &MyConfigRoot::field_float);
+    root.numeric<float>("float", &MyConfigRoot::field_float);
 
-    root.value<std::string>("str2", &MyConfigRoot::field_str)
+    root.string("str2", &MyConfigRoot::field_str)
         .default_value("[default]")
         .min_length(1)
         .max_length(23);
 
-    root.value<double>("double", &MyConfigRoot::field_double);
+    root.numeric<double>("double", &MyConfigRoot::field_double);
+
+    root.string("str3", &MyConfigRoot::field_buffer)
+        .min_length(4U)
+        .truncate_to_buffer(true)
+        .default_value("asdas2");
 
     auto child_config = ConfigNode<MyChildConfig>();
 
-    child_config.value<float>("float", &MyChildConfig::field_float)
+    child_config.numeric<float>("float", &MyChildConfig::field_float)
         .default_value(-1.245f);
 
-    child_config.value<std::string>("string", &MyChildConfig::field_str)
+    child_config.string("string", &MyChildConfig::field_str)
         .default_value("--str--")
-        .add_constraint([](auto& self, const std::string& f_value) static noexcept -> bool {
+        .add_constraint([](auto& self, std::string_view f_value) static noexcept -> bool {
         if (f_value != "--str--") {
             SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
             return false;
@@ -70,10 +76,10 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() {
 
     {
         auto inner_config = ConfigNode<Inner>();
-        inner_config.value<float>("float", &Inner::field_float)
+        inner_config.numeric<float>("float", &Inner::field_float)
             .default_value(-12.245f);
 
-        inner_config.value<std::string>("string", &Inner::field_str)
+        inner_config.string("string", &Inner::field_str)
             .default_value("--str--");
 
         child_config.array<Inner>("inner_obj", &MyChildConfig::field_inner, std::move(inner_config))
@@ -120,6 +126,8 @@ void example_validate_existing_config() {
     config.field_float  = 12.01f;
     config.field_double = 15.01;
     config.field_str    = "--str--";
+
+    (void)strcpy(config.field_buffer, "121525");
 
     config.field_obj.field_str  = "--str--";
     config.field_obj2.field_str = "--str--";

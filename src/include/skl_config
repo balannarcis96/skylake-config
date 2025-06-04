@@ -14,7 +14,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "skl_config_internal/value_field.hpp"
+#include "skl_config_internal/numeric_field.hpp"
+#include "skl_config_internal/string_field.hpp"
 #include "skl_config_internal/array_field.hpp"
 #include "skl_config_internal/object_field.hpp"
 
@@ -85,8 +86,11 @@ public:
         return *this;
     }
 
-    template <config::CValueFieldType _Field>
-    config::ValueField<_Field, _TargetConfig>& value(skl_string_view f_field_name, config::ValueField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+    /*=== char[] ===*/
+
+    template <u32 _N>
+        requires(_N > 1U)
+    config::StringField<char[_N], _TargetConfig>& string(skl_string_view f_field_name, char (_TargetConfig::*f_member_ptr)[_N]) {
         for (const auto& field : m_fields) {
             if (field->name() == f_field_name.std<std::string_view>()) {
                 SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
@@ -94,14 +98,57 @@ public:
             }
         }
 
-        m_fields.emplace_back(std::make_unique<config::ValueField<_Field, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
-        return static_cast<config::ValueField<_Field, _TargetConfig>&>(*m_fields.back());
+        m_fields.emplace_back(std::make_unique<config::StringField<char[_N], _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::StringField<char[_N], _TargetConfig>&>(*m_fields.back());
     }
 
-    template <config::CValueFieldType _Field, u32 _N>
-    config::ValueField<_Field, _TargetConfig>& value(const char (&f_field_name)[_N], config::ValueField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
-        return value<_Field>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    template <u32 _K, u32 _N>
+        requires((_N > 1U) && (_K > 1U))
+    config::StringField<char[_N], _TargetConfig>& string(const char (&f_field_name)[_K], char (_TargetConfig::*f_member_ptr)[_N]) {
+        return string(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
     }
+
+    /*=== std::string ===*/
+
+    config::StringField<std::string, _TargetConfig>& string(skl_string_view f_field_name, config::StringField<std::string, _TargetConfig>::member_ptr_t f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::StringField<std::string, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::StringField<std::string, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <u32 _K>
+        requires(_K > 1U)
+    config::StringField<std::string, _TargetConfig>& string(const char (&f_field_name)[_K], config::StringField<std::string, _TargetConfig>::member_ptr_t f_member_ptr) {
+        return string(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
+    /*=== numeric ===*/
+
+    template <config::CNumericValueFieldType _Field>
+    config::NumericField<_Field, _TargetConfig>& numeric(skl_string_view f_field_name, config::NumericField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::NumericField<_Field, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::NumericField<_Field, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CNumericValueFieldType _Field, u32 _N>
+    config::NumericField<_Field, _TargetConfig>& numeric(const char (&f_field_name)[_N], config::NumericField<_Field, _TargetConfig>::member_ptr_t f_member_ptr) {
+        return numeric<_Field>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
+    /*=== object ===*/
 
     template <config::CConfigTargetType _ChildTargetConfig>
     config::ObjectField<_ChildTargetConfig, _TargetConfig>& object(skl_string_view                                                      f_field_name,
@@ -132,6 +179,8 @@ public:
                                                                    ConfigNode<_ChildTargetConfig>&&                                     f_config) {
         return object<_ChildTargetConfig>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, std::move(f_config));
     }
+
+    /*=== array ===*/
 
     template <config::CConfigTargetType _ChildTargetConfig, template <typename> typename _Container = std::vector>
     config::ArrayField<_ChildTargetConfig, _TargetConfig, _Container>& array(skl_string_view                                                                 f_field_name,
