@@ -12,11 +12,15 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
+template <typename _Type, typename _Functor>
+concept CStringFieldConstraintFunctor = __is_class(_Functor)
+                                     && std::is_invocable_r_v<bool, _Functor, Field&, const std::string&>;
+
 template <CStringValueFieldType _Type, CConfigTargetType _TargetConfig>
 class StringField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t  = _Type _TargetConfig::*;
-    using constraints_t = std::vector<std::function<bool(StringField<_Type, _TargetConfig>&, std::string_view)>>;
+    using constraints_t = std::vector<std::function<bool(StringField<_Type, _TargetConfig>&, const std::string&)>>;
 
     StringField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         requires(__is_same(std::string, _Type))
@@ -116,7 +120,7 @@ public:
             }
         }
 
-        add_constraint([f_min_length](auto& f_self, std::string_view f_value) {
+        add_constraint([f_min_length](auto& f_self, const std::string& f_value) {
             if (f_value.length() < f_min_length) {
                 SERROR("Invalid string field \"{}\" value length! Min[{}]!", f_self.name_cstr(), f_min_length);
                 return false;
@@ -134,7 +138,7 @@ public:
             }
         }
 
-        add_constraint([f_max_length](auto& f_self, std::string_view f_value) {
+        add_constraint([f_max_length](auto& f_self, const std::string& f_value) {
             if (f_value.length() > f_max_length) {
                 SERROR("Invalid string field \"{}\" value length! Max[{}]!", f_self.name_cstr(), f_max_length);
                 return false;
@@ -145,10 +149,19 @@ public:
     }
 
     //! Add custom constraint
-    //! \remark (auto& f_self, std::string_view f_value) -> bool
+    //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <typename _Functor>
+        requires(CStringFieldConstraintFunctor<_Type, _Functor>)
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
+    }
+
+    //! Add custom constraint
+    //! \remark (Field& f_self, const std::string& f_value) -> bool
+    template <typename _Functor>
+        requires(CStringFieldConstraintFunctor<_Type, _Functor>)
+    void add_constraint() noexcept {
+        m_constraints.emplace_back(&_Functor::operator());
     }
 
     void reset() override {
@@ -190,7 +203,7 @@ protected:
         if ((false == m_is_default) || m_validate_if_default || false == m_is_validation_only) {
             //Run constraints
             for (const auto& constraint : m_constraints) {
-                if (false == constraint(*this, std::string_view{m_value.value()})) {
+                if (false == constraint(*this, m_value.value())) {
                     if (m_is_default) {
                         SERROR_LOCAL_T("Invalid default value({}) for string field\"{}\"!", m_value.value().c_str(), this->path_name().c_str());
                         throw std::runtime_error("StringField<T> Invalid default value");

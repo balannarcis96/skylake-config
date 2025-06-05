@@ -15,12 +15,27 @@
 
 namespace skl::config {
 template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
+class NumericField;
+
+template <typename _Type, typename _Functor>
+concept CNumericFieldParseRawFunctor = __is_class(_Functor)
+                                    && std::is_invocable_r_v<std::optional<_Type>, _Functor, Field&, const std::string&>;
+
+template <typename _Type, typename _Functor>
+concept CNumericFieldConstraintFunctor = __is_class(_Functor)
+                                      && std::is_invocable_r_v<bool, _Functor, Field&, _Type>;
+
+template <typename _Type, typename _Functor>
+concept CNumericFieldParseJsonFunctor = __is_class(_Functor)
+                                     && std::is_invocable_r_v<std::optional<_Type>, _Functor, Field&, json&>;
+
+template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
 class NumericField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t   = _Type _TargetConfig::*;
-    using constraints_t  = std::vector<std::function<bool(NumericField<_Type, _TargetConfig>&, _Type)>>;
-    using raw_parsert_t  = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, const std::string&)>;
-    using json_parsert_t = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, json&)>;
+    using constraints_t  = std::vector<std::function<bool(Field&, _Type)>>;
+    using raw_parsert_t  = std::function<std::optional<_Type>(Field&, const std::string&)>;
+    using json_parsert_t = std::function<std::optional<_Type>(Field&, json&)>;
 
     NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
@@ -51,7 +66,7 @@ public:
     }
 
     NumericField& min(_Type f_min) noexcept {
-        add_constraint([f_min](auto& f_self, _Type f_value) {
+        add_constraint([f_min](Field& f_self, _Type f_value) {
             if (f_value < f_min) {
                 SERROR("Invalid numeric field \"{}\" value! Min[{}]!", f_self.name_cstr(), f_min);
                 return false;
@@ -62,7 +77,7 @@ public:
     }
 
     NumericField& max(_Type f_max) noexcept {
-        add_constraint([f_max](auto& f_self, _Type f_value) {
+        add_constraint([f_max](Field& f_self, _Type f_value) {
             if (f_value > f_max) {
                 SERROR("Invalid numeric field \"{}\" value! Max[{}]!", f_self.name_cstr(), f_max);
                 return false;
@@ -76,51 +91,72 @@ public:
     NumericField& power_of_2() noexcept
         requires(CIntegerValueFieldType<_Type>)
     {
-        add_constraint([](auto& f_self, _Type f_value) static {
+        add_constraint<decltype([](Field& f_self, _Type f_value) static {
             if ((f_value < 2U) || (_Type(0) != ((f_value - _Type(1)) & f_value))) {
                 SERROR("Invalid numeric field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.name_cstr(), f_value);
                 return false;
             }
             return true;
-        });
+        })>();
         return *this;
     }
 
     //! Set custom raw json value string parser
-    //! \remark (auto& f_self, std::string_view f_string) -> std::optional<_Type>
+    //! \remark (Field& f_self, std::string_view f_string) -> std::optional<_Type>
     template <typename _Functor>
+        requires(CNumericFieldParseRawFunctor<_Type, _Functor>)
     NumericField& parse_raw(_Functor&& f_functor) noexcept {
         m_custom_raw_parser = std::forward<_Functor>(f_functor);
         return *this;
     }
 
     //! Set custom raw json value string parser
-    //! \remark (auto& f_self, std::string_view f_string) -> std::optional<_Type>
+    //! \remark (Field& f_self, std::string_view f_string) static -> std::optional<_Type>
     template <typename _Functor>
+        requires(CNumericFieldParseRawFunctor<_Type, _Functor>)
     NumericField& parse_raw() noexcept {
-        m_custom_raw_parser = &_Functor::operator();
+        m_custom_raw_parser = raw_parsert_t(&_Functor::operator());
         return *this;
     }
 
     //! Set custom json node parser
-    //! \remark (auto& f_self, json& f_json) -> std::optional<_Type>
+    //! \remark (Field& f_self, json& f_json) -> std::optional<_Type>
     template <typename _Functor>
+        requires(CNumericFieldParseJsonFunctor<_Type, _Functor>)
     NumericField& parse_json(_Functor&& f_functor) noexcept {
         m_custom_json_parser = std::forward<_Functor>(f_functor);
         return *this;
     }
 
     //! Set custom json node parser
-    //! \remark (auto& f_self, json& f_json) -> std::optional<_Type>
+    //! \remark (Field& f_self, json& f_json) static -> std::optional<_Type>
     template <typename _Functor>
+        requires(CNumericFieldParseJsonFunctor<_Type, _Functor>)
     NumericField& parse_json() noexcept {
         m_custom_json_parser = &_Functor::operator();
         return *this;
     }
 
     //! Add custom constraint
-    //! \remark (auto& f_self, _Type f_value) -> bool
+    //! \remark (Field& f_self, _Type f_value) static -> bool
     template <typename _Functor>
+        requires(CNumericFieldConstraintFunctor<_Type, _Functor>)
+    void add_constraint() noexcept {
+        m_constraints.emplace_back(&_Functor::operator());
+    }
+
+    //! Add custom constraint
+    //! \remark (Field& f_self, _Type f_value) -> bool
+    template <typename _Functor>
+        requires(CNumericFieldConstraintFunctor<_Type, _Functor>)
+    void add_constraint(const _Functor& f_functor) noexcept {
+        m_constraints.emplace_back(f_functor);
+    }
+
+    //! Add custom constraint
+    //! \remark (Field& f_self, _Type f_value) -> bool
+    template <typename _Functor>
+        requires(CNumericFieldConstraintFunctor<_Type, _Functor>)
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
     }

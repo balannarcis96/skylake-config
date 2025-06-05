@@ -12,6 +12,10 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
+template <typename _Type, typename _Functor>
+concept CBooleanFieldConstraintFunctor = __is_class(_Functor)
+                                      && std::is_invocable_r_v<std::optional<_Type>, _Functor, Field&, _Type>;
+
 template <CBooleanValueFieldType _Type, CConfigTargetType _TargetConfig>
 class BooleanField : public ConfigField<_TargetConfig> {
 public:
@@ -74,8 +78,15 @@ public:
     }
 
     template <typename _Functor>
+        requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
+    }
+
+    template <typename _Functor>
+        requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
+    void add_constraint() noexcept {
+        m_constraints.emplace_back(&_Functor::operator());
     }
 
     void reset() override {

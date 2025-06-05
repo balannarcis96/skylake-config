@@ -41,15 +41,15 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
 
     root.numeric("ip_addr", &MyConfigRoot::field_ip_addr)
         .required(true)
-        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
+        .parse_raw<decltype([](config::Field& f_self, std::string_view f_string) static -> std::optional<double> {
             const auto result = ipv4_addr_from_str(skl_string_view::from_std(f_string).data());
             if (result == CIpAny) {
-                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
+                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", f_self.path_name().c_str());
                 return std::nullopt;
             }
 
             return result;
-        });
+        })>();
 
     root.numeric("u8", &MyConfigRoot::field_u8)
         .default_value(23);
@@ -68,21 +68,21 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .max_length(23);
 
     root.numeric("double", &MyConfigRoot::field_double)
-        .parse_raw([](auto& self, const std::string& f_string) static -> std::optional<double> {
-            return self.safely_convert_to_numeric(f_string);
-        });
+        .parse_raw<decltype([](config::Field&, const std::string& f_string) static -> std::optional<double> {
+            return config::NumericField<double, MyConfigRoot>::safely_convert_to_numeric(f_string);
+        })>();
 
     root.numeric("ip_addr2", &MyConfigRoot::field_ip_addr)
         .required(true)
-        .parse_json([](auto& self, json& f_json) static -> std::optional<double> {
+        .parse_json<decltype([](config::Field& f_self, json& f_json) static -> std::optional<double> {
             const auto result = ipv4_addr_from_str(f_json.get<std::string>().c_str());
             if (result == CIpAny) {
-                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
+                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", f_self.path_name().c_str());
                 return std::nullopt;
             }
 
             return result;
-        });
+        })>();
 
     root.string("str3", &MyConfigRoot::field_buffer)
         .min_length(4U)
@@ -100,14 +100,14 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
 
     child_config.string("string", &MyChildConfig::field_str)
         .default_value("--str--")
-        .add_constraint([](auto& self, std::string_view f_value) static noexcept -> bool {
+        .add_constraint<decltype([](config::Field& f_self, const std::string& f_value) static -> bool {
             if (f_value != "--str--") {
-                SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
+                SERROR_LOCAL("Field {} must be \"--str--\"!", f_self.path_name().c_str());
                 return false;
             }
 
             return true;
-        });
+        })>();
 
     {
         auto inner_config = ConfigNode<Inner>();
@@ -144,6 +144,7 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         if (f_config.field_bool) {
             f_config.field_int += 255;
         }
+        return true;
     })>();
 
     built = true;

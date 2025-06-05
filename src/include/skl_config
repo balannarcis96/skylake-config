@@ -26,11 +26,15 @@
 namespace skl {
 using json = nlohmann::json;
 
+template <typename _TargetConfig, typename _Functor>
+concept CConfigNodeSubmitProcessorFunctor = __is_class(_Functor)
+                                         && std::is_invocable_r_v<bool, _Functor, _TargetConfig&>;
+
 template <config::CConfigTargetType _TargetConfig>
 class ConfigNode final : public config::Field {
 public:
     using field_t            = config::ConfigField<_TargetConfig>;
-    using submit_processor_t = std::function<void(_TargetConfig&)>;
+    using submit_processor_t = std::function<bool(_TargetConfig&)>;
 
     ConfigNode() noexcept
         : Field(nullptr, "__root__") { }
@@ -286,11 +290,13 @@ public:
     }
 
     template <typename _Functor>
+        requires(CConfigNodeSubmitProcessorFunctor<_TargetConfig, _Functor>)
     void post_submit(_Functor&& f_functor) {
         m_post_submit_processor = std::forward<_Functor>(f_functor);
     }
 
     template <typename _Functor>
+        requires(CConfigNodeSubmitProcessorFunctor<_TargetConfig, _Functor>)
     void post_submit() {
         m_post_submit_processor = &_Functor::operator();
     }
@@ -357,7 +363,9 @@ private:
         }
 
         if (m_post_submit_processor.has_value()) {
-            m_post_submit_processor.value()(f_out_config);
+            if (false == m_post_submit_processor.value()(f_out_config)) {
+                throw std::runtime_error("Config post submit processor failed!");
+            }
         }
     }
 
