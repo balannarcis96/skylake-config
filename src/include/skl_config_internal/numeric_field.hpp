@@ -94,11 +94,27 @@ public:
         return *this;
     }
 
+    //! Set custom raw json value string parser
+    //! \remark (auto& f_self, std::string_view f_string) -> std::optional<_Type>
+    template <typename _Functor>
+    NumericField& parse_raw() noexcept {
+        m_custom_raw_parser = &_Functor::operator();
+        return *this;
+    }
+
     //! Set custom json node parser
     //! \remark (auto& f_self, json& f_json) -> std::optional<_Type>
     template <typename _Functor>
     NumericField& parse_json(_Functor&& f_functor) noexcept {
         m_custom_json_parser = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Set custom json node parser
+    //! \remark (auto& f_self, json& f_json) -> std::optional<_Type>
+    template <typename _Functor>
+    NumericField& parse_json() noexcept {
+        m_custom_json_parser = &_Functor::operator();
         return *this;
     }
 
@@ -143,7 +159,7 @@ protected:
         if (exists) {
             if (false == m_custom_json_parser.has_value()) {
                 if (m_custom_raw_parser.has_value()) {
-                    const auto temp = src_json->is_string() ? src_json->template get<std::string>() : src_json->dump();
+                    const auto temp   = src_json->is_string() ? src_json->template get<std::string>() : src_json->dump();
                     const auto result = m_custom_raw_parser.value()(*this, temp);
                     if (false == result.has_value()) {
                         throw std::runtime_error("Custom parsing for numeric field failed!");

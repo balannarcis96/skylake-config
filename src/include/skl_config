@@ -29,7 +29,8 @@ using json = nlohmann::json;
 template <config::CConfigTargetType _TargetConfig>
 class ConfigNode final : public config::Field {
 public:
-    using field_t = config::ConfigField<_TargetConfig>;
+    using field_t            = config::ConfigField<_TargetConfig>;
+    using submit_processor_t = std::function<void(_TargetConfig&)>;
 
     ConfigNode() noexcept
         : Field(nullptr, "__root__") { }
@@ -240,7 +241,7 @@ public:
 
     template <config::CPrimitiveValueFieldType _Type, template <typename> typename _Container = std::vector>
     config::PrimitiveArrayField<_Type, _TargetConfig, _Container>& array_raw(skl_string_view                                                             f_field_name,
-                                                                         config::PrimitiveArrayField<_Type, _TargetConfig, _Container>::member_ptr_t f_member_ptr) {
+                                                                             config::PrimitiveArrayField<_Type, _TargetConfig, _Container>::member_ptr_t f_member_ptr) {
         for (const auto& field : m_fields) {
             if (field->name() == f_field_name.std<std::string_view>()) {
                 SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
@@ -255,7 +256,7 @@ public:
     template <config::CPrimitiveValueFieldType _Type, template <typename> typename _Container = std::vector, u32 _N>
         requires(_N > 1U)
     config::PrimitiveArrayField<_Type, _TargetConfig, _Container>& array_raw(const char (&f_field_name)[_N],
-                                                                         config::PrimitiveArrayField<_Type, _TargetConfig, _Container>::member_ptr_t f_member_ptr) {
+                                                                             config::PrimitiveArrayField<_Type, _TargetConfig, _Container>::member_ptr_t f_member_ptr) {
         return array_raw<_Type, _Container>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
     }
 
@@ -282,6 +283,16 @@ public:
     //! Clear all configured fields, objects and arrays
     void clear() {
         m_fields.clear();
+    }
+
+    template <typename _Functor>
+    void post_submit(_Functor&& f_functor) {
+        m_post_submit_processor = std::forward<_Functor>(f_functor);
+    }
+
+    template <typename _Functor>
+    void post_submit() {
+        m_post_submit_processor = &_Functor::operator();
     }
 
 private:
@@ -344,6 +355,10 @@ private:
         for (auto& field : m_fields) {
             field->submit(f_out_config);
         }
+
+        if (m_post_submit_processor.has_value()) {
+            m_post_submit_processor.value()(f_out_config);
+        }
     }
 
     void set_parent(std::string_view f_field_name, config::Field& f_parent) noexcept {
@@ -365,6 +380,7 @@ private:
 
 private:
     std::vector<std::unique_ptr<config::ConfigField<_TargetConfig>>> m_fields;
+    std::optional<submit_processor_t>                                m_post_submit_processor;
 
     template <config::CConfigTargetType, config::CConfigTargetType>
     friend class config::ObjectField;

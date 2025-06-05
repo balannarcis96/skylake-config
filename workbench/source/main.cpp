@@ -140,6 +140,12 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .min(4U)
         .power_of_2();
 
+    root.post_submit<decltype([](MyConfigRoot& f_config) static {
+        if (f_config.field_bool) {
+            f_config.field_int += 255;
+        }
+    })>();
+
     built = true;
 
     return root;
