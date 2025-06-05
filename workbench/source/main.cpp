@@ -1,4 +1,5 @@
 #include <skl_config>
+#include <skl_socket>
 
 using namespace skl;
 
@@ -19,6 +20,7 @@ struct MyConfigRoot {
     i32           field_int;
     float         field_float;
     double        field_double;
+    ipv4_addr_t   field_ip_addr;
     bool          field_bool;
     std::string   field_str;
     MyChildConfig field_obj;
@@ -52,7 +54,34 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .min_length(1)
         .max_length(23);
 
-    root.numeric("double", &MyConfigRoot::field_double);
+    root.numeric("double", &MyConfigRoot::field_double)
+        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
+            return self.safely_convert_to_numeric(f_string);
+        });
+
+    root.numeric("ip_addr", &MyConfigRoot::field_ip_addr)
+        .required(true)
+        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
+            const auto result = ipv4_addr_from_str(skl_string_view::from_std(f_string).data());
+            if (result == CIpAny) {
+                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
+                return std::nullopt;
+            }
+
+            return result;
+        });
+
+    root.numeric("ip_addr2", &MyConfigRoot::field_ip_addr)
+        .required(true)
+        .parse_json([](auto& self, json& f_json) static -> std::optional<double> {
+            const auto result = ipv4_addr_from_str(f_json.get<std::string>().c_str());
+            if (result == CIpAny) {
+                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
+                return std::nullopt;
+            }
+
+            return result;
+        });
 
     root.string("str3", &MyConfigRoot::field_buffer)
         .min_length(4U)
@@ -71,13 +100,13 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
     child_config.string("string", &MyChildConfig::field_str)
         .default_value("--str--")
         .add_constraint([](auto& self, std::string_view f_value) static noexcept -> bool {
-        if (f_value != "--str--") {
-            SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
-            return false;
-        }
+            if (f_value != "--str--") {
+                SERROR_LOCAL("Field {} must be \"--str--\"!", self.path_name().c_str());
+                return false;
+            }
 
-        return true;
-    });
+            return true;
+        });
 
     {
         auto inner_config = ConfigNode<Inner>();

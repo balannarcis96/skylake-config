@@ -144,6 +144,8 @@ public:
         return *this;
     }
 
+    //! Add custom constraint
+    //! \remark (auto& f_self, std::string_view f_value) -> bool
     template <typename _Functor>
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));

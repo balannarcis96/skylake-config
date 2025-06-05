@@ -266,6 +266,7 @@ private:
                 field->load(f_json);
             } catch (const std::exception& f_ex) {
                 failed = true;
+                puts(f_ex.what());
             }
         }
 
@@ -304,6 +305,7 @@ private:
                 field->validate();
             } catch (const std::exception& f_ex) {
                 failed = true;
+                puts(f_ex.what());
             }
         }
 

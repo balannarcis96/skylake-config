@@ -17,8 +17,10 @@ namespace skl::config {
 template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
 class NumericField : public ConfigField<_TargetConfig> {
 public:
-    using member_ptr_t  = _Type _TargetConfig::*;
-    using constraints_t = std::vector<std::function<bool(NumericField<_Type, _TargetConfig>&, _Type)>>;
+    using member_ptr_t   = _Type _TargetConfig::*;
+    using constraints_t  = std::vector<std::function<bool(NumericField<_Type, _TargetConfig>&, _Type)>>;
+    using raw_parsert_t  = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, std::string_view)>;
+    using json_parsert_t = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, json&)>;
 
     NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
@@ -84,6 +86,24 @@ public:
         return *this;
     }
 
+    //! Set custom raw json value string parser
+    //! \remark (auto& f_self, std::string_view f_string) -> std::optional<_Type>
+    template <typename _Functor>
+    NumericField& parse_raw(_Functor&& f_functor) noexcept {
+        m_custom_raw_parser = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Set custom json node parser
+    //! \remark (auto& f_self, json& f_json) -> std::optional<_Type>
+    template <typename _Functor>
+    NumericField& parse_json(_Functor&& f_functor) noexcept {
+        m_custom_json_parser = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Add custom constraint
+    //! \remark (auto& f_self, _Type f_value) -> bool
     template <typename _Functor>
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
@@ -95,21 +115,52 @@ public:
         m_value              = std::nullopt;
     }
 
+    [[nodiscard]] static std::optional<_Type> safely_convert_to_numeric(std::string_view f_str)
+        requires(CNumericValueFieldType<_Type>)
+    {
+        _Type value;
+        auto [ptr, ec] = std::from_chars(f_str.data(), f_str.data() + f_str.size(), value);
+        if (ec != std::errc{}) {
+            return std::nullopt;
+        }
+
+        return value;
+    }
+
 protected:
     void load(json& f_json) override {
         const auto exists = f_json.contains(this->name());
         if (exists) {
-            const auto result = safely_convert_to_numeric(f_json[this->name()].dump());
-            if (false == result.has_value()) {
-                SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
-                               this->path_name().c_str(),
-                               (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
-                               f_json[this->name()].dump().c_str(),
-                               std::numeric_limits<_Type>::min(),
-                               std::numeric_limits<_Type>::max());
-                throw std::runtime_error("Invalid integer value field!");
+            if (false == m_custom_json_parser.has_value()) {
+                const auto temp = f_json[this->name()].is_string() ? f_json[this->name()].template get<std::string>() : f_json[this->name()].dump();
+                if (m_custom_raw_parser.has_value()) {
+                    const auto result = m_custom_raw_parser.value()(*this, temp);
+                    if (false == result.has_value()) {
+                        throw std::runtime_error("Custom parsing for numeric field failed!");
+                    }
+
+                    m_value = result;
+                } else {
+                    const auto result = safely_convert_to_numeric(temp);
+                    if (false == result.has_value()) {
+                        SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
+                                       this->path_name().c_str(),
+                                       (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
+                                       f_json[this->name()].dump().c_str(),
+                                       std::numeric_limits<_Type>::min(),
+                                       std::numeric_limits<_Type>::max());
+                        throw std::runtime_error("Invalid numeric field value!");
+                    } else {
+                        m_value = result.value();
+                    }
+                }
             } else {
-                m_value = result.value();
+                const auto result = m_custom_json_parser.value()(*this, f_json[this->name()]);
+                if (false == result.has_value()) {
+                    throw std::runtime_error("Custom json parsing for numeric field failed!");
+                }
+
+                m_value = result;
             }
 
             m_is_default = false;
@@ -175,27 +226,16 @@ protected:
     }
 
 private:
-    [[nodiscard]] static std::optional<_Type> safely_convert_to_numeric(std::string_view f_str)
-        requires(CNumericValueFieldType<_Type>)
-    {
-        _Type value;
-        auto [ptr, ec] = std::from_chars(f_str.data(), f_str.data() + f_str.size(), value);
-        if (ec != std::errc{}) {
-            return std::nullopt;
-        }
-
-        return value;
-    }
-
-private:
-    std::optional<_Type> m_value;
-    std::optional<_Type> m_default;
-    member_ptr_t         m_member_ptr;
-    constraints_t        m_constraints;
-    bool                 m_required{false};
-    bool                 m_validate_if_default{true};
-    bool                 m_is_default{false};
-    bool                 m_is_validation_only{false};
+    std::optional<_Type>          m_value;
+    std::optional<_Type>          m_default;
+    std::optional<raw_parsert_t>  m_custom_raw_parser;
+    std::optional<json_parsert_t> m_custom_json_parser;
+    member_ptr_t                  m_member_ptr;
+    constraints_t                 m_constraints;
+    bool                          m_required{false};
+    bool                          m_validate_if_default{true};
+    bool                          m_is_default{false};
+    bool                          m_is_validation_only{false};
 
     friend ConfigNode<_TargetConfig>;
 };
