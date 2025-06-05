@@ -43,7 +43,11 @@ struct is_string_buffer<char[_N]> {
     static constexpr bool value = true;
 };
 
-template <typename _Field, u64 _N = 0ULL>
+template <typename _Field>
 concept CStringValueFieldType = __is_same(_Field, std::string)
                              || is_string_buffer<_Field>::value;
+
+template <typename _Field>
+concept CPrimitiveValueFieldType = CNumericValueFieldType<_Field>
+                                || CStringValueFieldType<_Field>;
 } // namespace skl::config

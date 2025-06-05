@@ -16,16 +16,17 @@ struct MyChildConfig {
 };
 
 struct MyConfigRoot {
-    u8            field_u8;
-    i32           field_int;
-    float         field_float;
-    double        field_double;
-    ipv4_addr_t   field_ip_addr;
-    bool          field_bool;
-    std::string   field_str;
-    MyChildConfig field_obj;
-    MyChildConfig field_obj2;
-    char          field_buffer[8U]{0};
+    u8               field_u8;
+    i32              field_int;
+    float            field_float;
+    double           field_double;
+    ipv4_addr_t      field_ip_addr;
+    bool             field_bool;
+    std::string      field_str;
+    MyChildConfig    field_obj;
+    MyChildConfig    field_obj2;
+    char             field_buffer[8U]{0};
+    std::vector<u32> field_prim_list;
 };
 
 namespace {
@@ -37,6 +38,18 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
     if (built) {
         return root;
     }
+
+    root.numeric("ip_addr", &MyConfigRoot::field_ip_addr)
+        .required(true)
+        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
+            const auto result = ipv4_addr_from_str(skl_string_view::from_std(f_string).data());
+            if (result == CIpAny) {
+                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
+                return std::nullopt;
+            }
+
+            return result;
+        });
 
     root.numeric("u8", &MyConfigRoot::field_u8)
         .default_value(23);
@@ -55,20 +68,8 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .max_length(23);
 
     root.numeric("double", &MyConfigRoot::field_double)
-        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
+        .parse_raw([](auto& self, const std::string& f_string) static -> std::optional<double> {
             return self.safely_convert_to_numeric(f_string);
-        });
-
-    root.numeric("ip_addr", &MyConfigRoot::field_ip_addr)
-        .required(true)
-        .parse_raw([](auto& self, std::string_view f_string) static -> std::optional<double> {
-            const auto result = ipv4_addr_from_str(skl_string_view::from_std(f_string).data());
-            if (result == CIpAny) {
-                SERROR_LOCAL("Field \"{}\" must be a non-zero valid ip address!", self.path_name().c_str());
-                return std::nullopt;
-            }
-
-            return result;
         });
 
     root.numeric("ip_addr2", &MyConfigRoot::field_ip_addr)
@@ -132,6 +133,12 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
 
     root.object("obj2", &MyConfigRoot::field_obj2, std::move(child_config))
         .required(true);
+
+    root.array_raw<u32>(skl_string_view::exact_cstr("field_prim_list"), &MyConfigRoot::field_prim_list)
+        .required(true)
+        .field()
+        .min(4U)
+        .power_of_2();
 
     built = true;
 

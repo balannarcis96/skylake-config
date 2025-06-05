@@ -19,7 +19,7 @@ class NumericField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t   = _Type _TargetConfig::*;
     using constraints_t  = std::vector<std::function<bool(NumericField<_Type, _TargetConfig>&, _Type)>>;
-    using raw_parsert_t  = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, std::string_view)>;
+    using raw_parsert_t  = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, const std::string&)>;
     using json_parsert_t = std::function<std::optional<_Type>(NumericField<_Type, _TargetConfig>&, json&)>;
 
     NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
@@ -129,11 +129,21 @@ public:
 
 protected:
     void load(json& f_json) override {
-        const auto exists = f_json.contains(this->name());
+        bool  exists   = false;
+        json* src_json = nullptr;
+
+        if (f_json.is_number() || f_json.is_string()) {
+            exists   = true;
+            src_json = &f_json;
+        } else {
+            exists   = f_json.contains(this->name());
+            src_json = &f_json[this->name()];
+        }
+
         if (exists) {
             if (false == m_custom_json_parser.has_value()) {
-                const auto temp = f_json[this->name()].is_string() ? f_json[this->name()].template get<std::string>() : f_json[this->name()].dump();
                 if (m_custom_raw_parser.has_value()) {
+                    const auto temp = src_json->is_string() ? src_json->template get<std::string>() : src_json->dump();
                     const auto result = m_custom_raw_parser.value()(*this, temp);
                     if (false == result.has_value()) {
                         throw std::runtime_error("Custom parsing for numeric field failed!");
@@ -141,12 +151,12 @@ protected:
 
                     m_value = result;
                 } else {
-                    const auto result = safely_convert_to_numeric(temp);
+                    const auto result = safely_convert_to_numeric(src_json->is_string() ? src_json->template get<std::string>() : src_json->dump());
                     if (false == result.has_value()) {
                         SERROR_LOCAL_T("Numeric field \"{}\" has an invalid {} value({})! Min[{}] Max[{}]",
                                        this->path_name().c_str(),
                                        (false == __is_same(_Type, float)) ? (__is_same(_Type, double) ? "double" : "integer") : "float",
-                                       f_json[this->name()].dump().c_str(),
+                                       src_json->dump().c_str(),
                                        std::numeric_limits<_Type>::min(),
                                        std::numeric_limits<_Type>::max());
                         throw std::runtime_error("Invalid numeric field value!");
@@ -155,7 +165,7 @@ protected:
                     }
                 }
             } else {
-                const auto result = m_custom_json_parser.value()(*this, f_json[this->name()]);
+                const auto result = m_custom_json_parser.value()(*this, *src_json);
                 if (false == result.has_value()) {
                     throw std::runtime_error("Custom json parsing for numeric field failed!");
                 }
@@ -238,6 +248,9 @@ private:
     bool                          m_is_validation_only{false};
 
     friend ConfigNode<_TargetConfig>;
+
+    template <CPrimitiveValueFieldType, CConfigTargetType, template <typename> typename>
+    friend class PrimitiveArrayField;
 };
 } // namespace skl::config
 

@@ -248,6 +248,9 @@ private:
     bool                       m_truncate_to_buffer{false};
 
     friend ConfigNode<_TargetConfig>;
+
+    template <CPrimitiveValueFieldType, CConfigTargetType, template <typename> typename>
+    friend class PrimitiveArrayField;
 };
 } // namespace skl::config
 
