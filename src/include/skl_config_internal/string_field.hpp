@@ -12,15 +12,18 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
-template <typename _Type, typename _Functor>
+template <typename _Functor>
 concept CStringFieldConstraintFunctor = __is_class(_Functor)
                                      && std::is_invocable_r_v<bool, _Functor, Field&, const std::string&>;
-
+template <typename _Functor>
+concept CStringFieldPostLoadFunctor = __is_class(_Functor)
+                                   && std::is_invocable_r_v<bool, _Functor, Field&, const std::string&>;
 template <CStringValueFieldType _Type, CConfigTargetType _TargetConfig>
 class StringField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t  = _Type _TargetConfig::*;
-    using constraints_t = std::vector<std::function<bool(StringField<_Type, _TargetConfig>&, const std::string&)>>;
+    using constraints_t = std::vector<std::function<bool(Field&, const std::string&)>>;
+    using post_load_t   = std::function<bool(Field&, const std::string&)>;
 
     StringField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         requires(__is_same(std::string, _Type))
@@ -154,18 +157,32 @@ public:
         return *this;
     }
 
+    //! Add post load handler
+    //! \remark (Field& f_self, const std::string& f_value) -> bool
+    template <CStringFieldPostLoadFunctor _Functor>
+    StringField& post_load(_Functor&& f_functor) noexcept {
+        m_post_load = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Add post load handler
+    //! \remark (Field& f_self, const std::string& f_value) static -> bool
+    template <CStringFieldPostLoadFunctor _Functor>
+    StringField& post_load() noexcept {
+        m_post_load = &_Functor::operator();
+        return *this;
+    }
+
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
-    template <typename _Functor>
-        requires(CStringFieldConstraintFunctor<_Type, _Functor>)
+    template <CStringFieldConstraintFunctor _Functor>
     void add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
     }
 
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
-    template <typename _Functor>
-        requires(CStringFieldConstraintFunctor<_Type, _Functor>)
+    template <CStringFieldConstraintFunctor _Functor>
     void add_constraint() noexcept {
         m_constraints.emplace_back(&_Functor::operator());
     }
@@ -189,6 +206,13 @@ protected:
                 } else {
                     SERROR_LOCAL_T("Field \"{}\" must be a string field!", this->path_name().c_str());
                     throw std::runtime_error("String field doesnt have a string value!");
+                }
+            }
+
+            if (m_post_load.has_value()) {
+                if (false == m_post_load.value()(*this, m_value.value())) {
+                    SERROR_LOCAL_T("Field \"{}\" failed post load!", this->path_name().c_str());
+                    throw std::runtime_error("String field failed post load!");
                 }
             }
 
@@ -244,7 +268,9 @@ protected:
                 throw std::runtime_error("StringField<char[N]> value read overruns the target buffer!");
             }
 
-            std::string_view{m_value.value()}.copy(f_config.*m_member_ptr, m_buffer_size - 1U);
+            const auto length = std::string_view{m_value.value()}.copy(f_config.*m_member_ptr, m_buffer_size - 1U);
+
+            (f_config.*m_member_ptr)[length]             = 0;
             (f_config.*m_member_ptr)[m_buffer_size - 1U] = 0;
         }
     }
@@ -270,6 +296,7 @@ private:
     std::optional<std::string> m_default;
     member_ptr_t               m_member_ptr;
     constraints_t              m_constraints;
+    std::optional<post_load_t> m_post_load;
     u64                        m_buffer_size{0ULL};
     bool                       m_required{false};
     bool                       m_validate_if_default{true};

@@ -29,6 +29,10 @@ template <typename _Type, typename _Functor>
 concept CNumericFieldParseJsonFunctor = __is_class(_Functor)
                                      && std::is_invocable_r_v<std::optional<_Type>, _Functor, Field&, json&>;
 
+template <typename _Type, typename _Functor>
+concept CNumericFieldPostLoadFunctor = __is_class(_Functor)
+                                    && std::is_invocable_r_v<bool, _Functor, Field&, _Type>;
+
 template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
 class NumericField : public ConfigField<_TargetConfig> {
 public:
@@ -36,6 +40,7 @@ public:
     using constraints_t  = std::vector<std::function<bool(Field&, _Type)>>;
     using raw_parsert_t  = std::function<std::optional<_Type>(Field&, const std::string&)>;
     using json_parsert_t = std::function<std::optional<_Type>(Field&, json&)>;
+    using post_load_t    = std::function<bool(Field&, _Type)>;
 
     NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
@@ -137,6 +142,24 @@ public:
         return *this;
     }
 
+    //! Add post load handler
+    //! \remark (Field& f_self, const std::string& f_value) -> bool
+    template <typename _Functor>
+        requires(CNumericFieldPostLoadFunctor<_Type, _Functor>)
+    NumericField& post_load(_Functor&& f_functor) noexcept {
+        m_post_load = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Add post load handler
+    //! \remark (Field& f_self, const std::string& f_value) static -> bool
+    template <typename _Functor>
+        requires(CNumericFieldPostLoadFunctor<_Type, _Functor>)
+    NumericField& post_load() noexcept {
+        m_post_load = &_Functor::operator();
+        return *this;
+    }
+
     //! Add custom constraint
     //! \remark (Field& f_self, _Type f_value) static -> bool
     template <typename _Functor>
@@ -225,6 +248,13 @@ protected:
                 m_value = result;
             }
 
+            if (m_post_load.has_value()) {
+                if (false == m_post_load.value()(*this, m_value.value())) {
+                    SERROR_LOCAL_T("Field \"{}\" failed post load!", this->path_name().c_str());
+                    throw std::runtime_error("Numeric field failed post load!");
+                }
+            }
+
             m_is_default = false;
         } else {
             if (m_required) {
@@ -292,6 +322,7 @@ private:
     std::optional<_Type>          m_default;
     std::optional<raw_parsert_t>  m_custom_raw_parser;
     std::optional<json_parsert_t> m_custom_json_parser;
+    std::optional<post_load_t>    m_post_load;
     member_ptr_t                  m_member_ptr;
     constraints_t                 m_constraints;
     bool                          m_required{false};
