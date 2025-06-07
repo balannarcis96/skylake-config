@@ -68,7 +68,7 @@ public:
     NumericField& min(_Type f_min) noexcept {
         add_constraint([f_min](Field& f_self, _Type f_value) {
             if (f_value < f_min) {
-                SERROR("Invalid numeric field \"{}\" value! Min[{}]!", f_self.name_cstr(), f_min);
+                SERROR("Invalid numeric field \"{}\" value! Min[{}]!", f_self.path_name().c_str(), f_min);
                 return false;
             }
             return true;
@@ -79,7 +79,7 @@ public:
     NumericField& max(_Type f_max) noexcept {
         add_constraint([f_max](Field& f_self, _Type f_value) {
             if (f_value > f_max) {
-                SERROR("Invalid numeric field \"{}\" value! Max[{}]!", f_self.name_cstr(), f_max);
+                SERROR("Invalid numeric field \"{}\" value! Max[{}]!", f_self.path_name().c_str(), f_max);
                 return false;
             }
 
@@ -93,7 +93,7 @@ public:
     {
         add_constraint<decltype([](Field& f_self, _Type f_value) static {
             if ((f_value < 2U) || (_Type(0) != ((f_value - _Type(1)) & f_value))) {
-                SERROR("Invalid numeric field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.name_cstr(), f_value);
+                SERROR("Invalid numeric field \"{}\" value({}) must be a power of 2! Min[2]!", f_self.path_name().c_str(), f_value);
                 return false;
             }
             return true;
@@ -301,7 +301,7 @@ private:
 
     friend ConfigNode<_TargetConfig>;
 
-    template <CPrimitiveValueFieldType, CConfigTargetType, template <typename> typename>
+    template <CPrimitiveValueFieldType, CConfigTargetType, config::CContainerType>
     friend class PrimitiveArrayField;
 };
 } // namespace skl::config

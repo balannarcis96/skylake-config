@@ -12,15 +12,19 @@
 #define SKL_LOG_TAG ""
 
 namespace skl::config {
-template <CConfigTargetType _Object, CConfigTargetType _TargetConfig, template <typename> typename _Container>
+template <CConfigTargetType _Object, CConfigTargetType _TargetConfig, CContainerType _Container>
 class ArrayField : public ConfigField<_TargetConfig> {
 public:
-    using member_ptr_t = _Container<_Object> _TargetConfig::*;
+    using member_ptr_t = _Container _TargetConfig::*;
+
+    static constexpr bool CIsATRPContainer      = CATRPContainerType<_Container>;
+    static constexpr bool CIsResizableContainer = CResizableContainerType<_Container>;
 
     ArrayField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr, ConfigNode<_Object>&& f_config) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
         , m_member_ptr(f_member_ptr)
         , m_config(std::move(f_config)) {
+        m_config.update_parent(*this);
     }
 
     ~ArrayField() override                       = default;
@@ -53,6 +57,22 @@ public:
         m_min_length = f_min_length;
         m_max_length = f_max_length;
         return *this;
+    }
+
+    //! For fixed size containers, should the input be truncated to the container size on overflow
+    ArrayField& truncate_on_overflow(bool f_truncate_on_overflow) noexcept
+        requires(false == CIsResizableContainer)
+    {
+        m_truncate_on_overflow = f_truncate_on_overflow;
+        return *this;
+    }
+
+    [[nodiscard]] std::string path_name() const noexcept override {
+        if (nullptr == this->m_parent) {
+            return std::string(this->name_cstr()) + "[]";
+        }
+
+        return this->m_parent->path_name() + ":" + this->name_cstr() + "[]";
     }
 
 private:
@@ -116,11 +136,39 @@ private:
     void submit(_TargetConfig& f_config) override {
         auto& field = f_config.*m_member_ptr;
 
-        field.clear();
-        field.resize(m_entries.size());
+        if constexpr (CIsATRPContainer) {
+            field.upgrade().clear();
+        } else {
+            field.clear();
+        }
 
-        for (u64 i = 0ULL; i < m_entries.size(); ++i) {
-            m_entries[i].submit(field[i]);
+        if constexpr (CIsResizableContainer) {
+            if constexpr (CIsATRPContainer) {
+                field.upgrade().resize(m_entries.size());
+            } else {
+                field.resize(m_entries.size());
+            }
+
+            for (u64 i = 0ULL; i < field.size(); ++i) {
+                m_entries[i].submit(field[i]);
+            }
+        } else {
+            if (m_entries.size() > field.capacity()) {
+                if (false == m_truncate_on_overflow) {
+                    SERROR_LOCAL_T("Array field \"{}\" elements count({}) does not fit in the target fixed capacity({}) container!", this->path_name().c_str(), m_entries.size(), field.capacity());
+                    throw std::runtime_error("Array elements overflow the target container!");
+                }
+            }
+
+            for (u64 i = 0ULL; i < std::min(field.capacity(), m_entries.size()); ++i) {
+                if constexpr (CIsATRPContainer) {
+                    (void)field.upgrade().emplace_back({});
+                } else {
+                    field.emplace_back({});
+                }
+
+                m_entries[i].submit(field.back());
+            }
         }
     }
 
@@ -183,6 +231,7 @@ private:
     bool                                m_required{false};
     bool                                m_is_default{false};
     bool                                m_is_validation_only{false};
+    bool                                m_truncate_on_overflow{false};
 };
 } // namespace skl::config
 

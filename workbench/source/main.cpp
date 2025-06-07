@@ -1,10 +1,16 @@
 #include <skl_config>
 #include <skl_socket>
+#include <skl_vector_if>
+#include <skl_fixed_vector_if>
 
 using namespace skl;
 
 struct Inner {
     float       field_float;
+    std::string field_str;
+};
+
+struct Inner2 {
     std::string field_str;
 };
 
@@ -16,17 +22,23 @@ struct MyChildConfig {
 };
 
 struct MyConfigRoot {
-    u8               field_u8;
-    i32              field_int;
-    float            field_float;
-    double           field_double;
-    ipv4_addr_t      field_ip_addr;
-    bool             field_bool;
-    std::string      field_str;
-    MyChildConfig    field_obj;
-    MyChildConfig    field_obj2;
-    char             field_buffer[8U]{0};
-    std::vector<u32> field_prim_list;
+    u8                           field_u8;
+    i32                          field_int;
+    float                        field_float;
+    double                       field_double;
+    ipv4_addr_t                  field_ip_addr;
+    bool                         field_bool;
+    char                         field_str[256U];
+    MyChildConfig                field_obj;
+    MyChildConfig                field_obj2;
+    char                         field_buffer[8U]{0};
+    std::vector<u32>             field_prim_list;
+    skl_fixed_vector<u32, 4U>    field_prim_list_fixed;
+    std::vector<Inner>           field_inner_via_proxy;
+    skl_fixed_vector<Inner, 3U>  field_inner_via_proxy_fixed;
+    skl_vector<Inner2>           field_inner2;
+    skl_fixed_vector<Inner2, 4U> field_inner2_fixed;
+    skl_fixed_vector<u32, 4U>    field_number_fixed;
 };
 
 namespace {
@@ -64,8 +76,7 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
 
     root.string("str2", &MyConfigRoot::field_str)
         .default_value("[default]")
-        .min_length(1)
-        .max_length(23);
+        .dump_if_not_string(true);
 
     root.numeric("double", &MyConfigRoot::field_double)
         .parse_raw<decltype([](config::Field&, const std::string& f_string) static -> std::optional<double> {
@@ -140,6 +151,79 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .min(4U)
         .power_of_2();
 
+    root.array_raw<u32, decltype(MyConfigRoot::field_prim_list_fixed)>(skl_string_view::exact_cstr("field_prim_list_fixed"), &MyConfigRoot::field_prim_list_fixed)
+        .required(true)
+        .min_length(1U)
+        .field()
+        .min(4U)
+        .power_of_2();
+    {
+        struct InnerProxy {
+            char float_str[32U];
+            u32  field_u32;
+
+            void submit(config::Field&, Inner& f_inner) const noexcept {
+                f_inner.field_float = strtof(float_str, nullptr);
+                f_inner.field_str   = std::to_string(field_u32) + "_integer";
+            }
+
+            bool load(config::Field& f_self, const Inner& f_inner) noexcept {
+                const auto temp = std::to_string(f_inner.field_float);
+                if (temp.length() >= std::size(float_str)) {
+                    SERROR_LOCAL("[InnerPorxy] Field \"{}\" -> cannot fit string (\"{}\") into InnerProxy::float_str[{}]!",
+                                 f_self.path_name().c_str(),
+                                 temp.c_str(),
+                                 std::size(float_str));
+                    return false;
+                }
+
+                field_u32 = strtoul(f_inner.field_str.c_str(), nullptr, 10);
+
+                return true;
+            }
+        };
+
+        ConfigNode<InnerProxy> inner_proxy_loader{};
+
+        inner_proxy_loader.string("float_str", &InnerProxy::float_str)
+            .required(true);
+
+        inner_proxy_loader.numeric("field_u32", &InnerProxy::field_u32)
+            .min(10U)
+            .max(1024U)
+            .default_value(123U);
+
+        root.array_proxy<Inner, InnerProxy>("field_inner_via_proxy",
+                                            &MyConfigRoot::field_inner_via_proxy,
+                                            inner_proxy_loader)
+            .required(true)
+            .min_length(1U);
+
+        root.array_proxy<Inner, InnerProxy, decltype(MyConfigRoot::field_inner_via_proxy_fixed)>("field_inner_via_proxy_fixed",
+                                                                                                 &MyConfigRoot::field_inner_via_proxy_fixed,
+                                                                                                 std::move(inner_proxy_loader))
+            .required(true)
+            .min_length(1U);
+    }
+
+    {
+        ConfigNode<Inner2> inner2_loader{};
+
+        inner2_loader.string("field_str", &Inner2::field_str)
+            .default_value("default");
+
+        root.array<Inner2, skl_vector<Inner2>>("inner2",
+                                               &MyConfigRoot::field_inner2,
+                                               inner2_loader)
+            .default_value({Inner2{"asdasd"}, Inner2{"1111111"}});
+
+        root.array<Inner2, decltype(MyConfigRoot::field_inner2_fixed)>("inner2_fixed",
+                                                                       &MyConfigRoot::field_inner2_fixed,
+                                                                       std::move(inner2_loader))
+            .min_length(1U)
+            .required(true);
+    }
+
     root.post_submit<decltype([](MyConfigRoot& f_config) static {
         if (f_config.field_bool) {
             f_config.field_int += 255;
@@ -173,7 +257,6 @@ void example_validate_existing_config() {
     config.field_int    = 32;
     config.field_float  = 12.01f;
     config.field_double = 15.01;
-    config.field_str    = "--str--";
 
     (void)strcpy(config.field_buffer, "121525");
 
@@ -182,6 +265,11 @@ void example_validate_existing_config() {
 
     config.field_obj.field_inner.push_back({.field_str = "--str--"});
     config.field_obj2.field_inner.push_back({.field_str = "--str--"});
+
+    config.field_inner_via_proxy.push_back(Inner{.field_float = 23.2f, .field_str = "123"});
+    SKL_ASSERT_PERMANENT(config.field_inner_via_proxy_fixed.upgrade().push_back(Inner{.field_float = 23.2f, .field_str = "123"}));
+    SKL_ASSERT_PERMANENT(config.field_inner2_fixed.upgrade().push_back({}));
+    SKL_ASSERT_PERMANENT(config.field_prim_list_fixed.upgrade().push_back(4));
 
     try {
         auto& root = example_get_config_loader();

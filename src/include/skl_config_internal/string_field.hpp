@@ -112,6 +112,12 @@ public:
         return *this;
     }
 
+    //! Dump the json as string if the json field is not of type string
+    StringField& dump_if_not_string(bool f_dump_if_not_string) noexcept {
+        m_dump_if_not_string = f_dump_if_not_string;
+        return *this;
+    }
+
     StringField& min_length(u32 f_min_length) {
         if constexpr (false == __is_same(std::string, _Type)) {
             if (f_min_length > (m_buffer_size - 1U)) {
@@ -174,7 +180,18 @@ protected:
     void load(json& f_json) override {
         const auto exists = f_json.contains(this->name());
         if (exists) {
-            m_value      = f_json[this->name()].template get<std::string>();
+            auto& json = f_json[this->name()];
+            if (json.is_string()) {
+                m_value = json.template get<std::string>();
+            } else {
+                if (m_dump_if_not_string) {
+                    m_value = json.dump();
+                } else {
+                    SERROR_LOCAL_T("Field \"{}\" must be a string field!", this->path_name().c_str());
+                    throw std::runtime_error("String field doesnt have a string value!");
+                }
+            }
+
             m_is_default = false;
         } else {
             if (m_required) {
@@ -259,10 +276,11 @@ private:
     bool                       m_is_default{false};
     bool                       m_is_validation_only{false};
     bool                       m_truncate_to_buffer{false};
+    bool                       m_dump_if_not_string{false};
 
     friend ConfigNode<_TargetConfig>;
 
-    template <CPrimitiveValueFieldType, CConfigTargetType, template <typename> typename>
+    template <CPrimitiveValueFieldType, CConfigTargetType, config::CContainerType>
     friend class PrimitiveArrayField;
 };
 } // namespace skl::config

@@ -45,7 +45,7 @@ public:
         return m_parent;
     }
 
-    [[nodiscard]] std::string path_name() const noexcept {
+    [[nodiscard]] virtual std::string path_name() const noexcept {
         if (nullptr == m_parent) {
             return name_cstr();
         }
