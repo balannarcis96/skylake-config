@@ -33,6 +33,10 @@ template <typename _Type, typename _Functor>
 concept CNumericFieldPostLoadFunctor = __is_class(_Functor)
                                     && std::is_invocable_r_v<bool, _Functor, Field&, _Type>;
 
+template <typename _Type, typename _Functor, typename _TargetConfig>
+concept CNumericFieldPreSubmitFunctor = __is_class(_Functor)
+                                     && std::is_invocable_r_v<bool, _Functor, Field&, _Type, _TargetConfig&>;
+
 template <CNumericValueFieldType _Type, CConfigTargetType _TargetConfig>
 class NumericField : public ConfigField<_TargetConfig> {
 public:
@@ -41,6 +45,7 @@ public:
     using raw_parsert_t  = std::function<std::optional<_Type>(Field&, const std::string&)>;
     using json_parsert_t = std::function<std::optional<_Type>(Field&, json&)>;
     using post_load_t    = std::function<bool(Field&, _Type)>;
+    using pre_submit_t   = std::function<bool(Field&, _Type, _TargetConfig&)>;
 
     NumericField(Field* f_parent, std::string_view f_field_name, member_ptr_t f_member_ptr) noexcept
         : ConfigField<_TargetConfig>(f_parent, f_field_name)
@@ -142,8 +147,8 @@ public:
         return *this;
     }
 
-    //! Add post load handler
-    //! \remark (Field& f_self, const std::string& f_value) -> bool
+    //! Set post load handler
+    //! \remark (Field& f_self, _Type f_val) -> bool
     template <typename _Functor>
         requires(CNumericFieldPostLoadFunctor<_Type, _Functor>)
     NumericField& post_load(_Functor&& f_functor) noexcept {
@@ -151,12 +156,30 @@ public:
         return *this;
     }
 
-    //! Add post load handler
-    //! \remark (Field& f_self, const std::string& f_value) static -> bool
+    //! Set post load handler
+    //! \remark (Field& f_self, _Type f_val) static -> bool
     template <typename _Functor>
         requires(CNumericFieldPostLoadFunctor<_Type, _Functor>)
     NumericField& post_load() noexcept {
         m_post_load = &_Functor::operator();
+        return *this;
+    }
+
+    //! Set pre submit handler
+    //! \remark (Field& f_self, _Type f_val, _TargetConfig& f_config) -> bool
+    template <typename _Functor>
+        requires(CNumericFieldPreSubmitFunctor<_Type, _Functor, _TargetConfig>)
+    NumericField& pre_submit(_Functor&& f_functor) noexcept {
+        m_pre_submit = std::forward<_Functor>(f_functor);
+        return *this;
+    }
+
+    //! Set pre submit handler
+    //! \remark (Field& f_self, const std::string& f_value) static -> bool
+    template <typename _Functor>
+        requires(CNumericFieldPreSubmitFunctor<_Type, _Functor, _TargetConfig>)
+    NumericField& post_load() noexcept {
+        m_pre_submit = &_Functor::operator();
         return *this;
     }
 
@@ -298,6 +321,14 @@ protected:
 
     void submit(_TargetConfig& f_config) override {
         SKL_ASSERT(m_value.has_value());
+
+        if (m_pre_submit.has_value()) {
+            if (false == m_pre_submit.value()(*this, m_value.value(), f_config)) {
+                SERROR_LOCAL_T("NumericFiled \"{}\" pre_submit handler failed!", this->path_name().c_str());
+                throw std::runtime_error("NumericFiled pre_submit handler failed!");
+            }
+        }
+
         f_config.*m_member_ptr = m_value.value();
     }
 
@@ -323,6 +354,7 @@ private:
     std::optional<raw_parsert_t>  m_custom_raw_parser;
     std::optional<json_parsert_t> m_custom_json_parser;
     std::optional<post_load_t>    m_post_load;
+    std::optional<pre_submit_t>   m_pre_submit;
     member_ptr_t                  m_member_ptr;
     constraints_t                 m_constraints;
     bool                          m_required{false};
