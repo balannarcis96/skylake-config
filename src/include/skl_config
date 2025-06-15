@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include "skl_config_internal/numeric_field.hpp"
+#include "skl_config_internal/enumc_field.hpp"
 #include "skl_config_internal/boolean_field.hpp"
 #include "skl_config_internal/string_field.hpp"
 #include "skl_config_internal/primitive_array_field.hpp"
@@ -44,7 +45,8 @@ public:
     ~ConfigNode() override = default;
 
     ConfigNode(const ConfigNode& f_other)
-        : config::Field(f_other) {
+        : config::Field(f_other)
+        , m_post_submit_processor(f_other.m_post_submit_processor) {
         m_fields.reserve(f_other.m_fields.size());
 
         for (const auto& field : f_other.m_fields) {
@@ -61,6 +63,7 @@ public:
 
         m_fields.clear();
         m_fields.reserve(f_other.m_fields.size());
+        m_post_submit_processor = f_other.m_post_submit_processor;
 
         for (const auto& field : f_other.m_fields) {
             auto clone = field->clone();
@@ -73,7 +76,8 @@ public:
 
     ConfigNode(ConfigNode&& f_other) noexcept
         : config::Field(std::move(f_other))
-        , m_fields(std::move(f_other.m_fields)) {
+        , m_fields(std::move(f_other.m_fields))
+        , m_post_submit_processor(std::move(f_other.m_post_submit_processor)) {
 
         for (auto& field : m_fields) {
             field->update_parent(*this);
@@ -86,13 +90,34 @@ public:
         }
 
         m_fields.clear();
-        m_fields = std::move(f_other.m_fields);
+        m_fields                = std::move(f_other.m_fields);
+        m_post_submit_processor = std::move(f_other.m_post_submit_processor);
 
         for (auto& field : m_fields) {
             field->update_parent(*this);
         }
 
         return *this;
+    }
+
+    /*=== enum ===*/
+
+    template <config::CEnumValueFieldType _Type>
+    config::EnumField<_Type, _TargetConfig>& enumeration(skl_string_view f_field_name, _Type _TargetConfig::* f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::EnumField<_Type, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::EnumField<_Type, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CEnumValueFieldType _Type, u32 _N>
+    config::EnumField<_Type, _TargetConfig>& enumeration(const char (&f_field_name)[_N], _Type _TargetConfig::* f_member_ptr) {
+        return enumeration(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
     }
 
     /*=== boolean ===*/

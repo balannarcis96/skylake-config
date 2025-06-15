@@ -29,6 +29,19 @@ A fluent‐builder JSON library for loading and validating configuration
 #include <skl_config>
 
 using namespace skl;
+enum EMyNonClassEnum : i32 {
+    EMyNonClassEnum_Value1 = -1,
+    EMyNonClassEnum_Value2 = 0,
+    EMyNonClassEnum_Value3,
+    EMyNonClassEnum_MAX
+};
+
+enum class EMyEnum : i32 {
+    Value1 = -1,
+    Value2 = 0,
+    Value3,
+    MAX
+};
 
 struct Inner {
     float       field_float;
@@ -43,13 +56,15 @@ struct MyChildConfig {
 };
 
 struct MyConfigRoot {
-    u8            field_u8;
-    i32           field_int;
-    float         field_float;
-    double        field_double;
-    std::string   field_str;
-    MyChildConfig field_obj;
-    MyChildConfig field_obj2;
+    u8              field_u8;
+    i32             field_int;
+    float           field_float;
+    double          field_double;
+    bool            field_bool;
+    EMyNonClassEnum field_enum;
+    std::string     field_str;
+    MyChildConfig   field_obj;
+    MyChildConfig   field_obj2;
 };
 
 i32 main(i32 f_argc, const char** f_argv) {
@@ -71,6 +86,13 @@ i32 main(i32 f_argc, const char** f_argv) {
         .min_max_length(1, 23);
 
     root.value<double>("double", &MyConfigRoot::field_double);
+
+    root.boolean("bool", &MyConfigRoot::field_bool)
+        .interpret_str(true)
+        .interpret_str_true_value("TRUE");
+
+    root.enumeration("enum", &MyConfigRoot::field_enum)
+        .required(true);
 
     auto child_config = ConfigNode<MyChildConfig>();
 
@@ -153,6 +175,13 @@ try{
 [ERROR  ][...] -- Field "__root__:obj2:float" has an invalid float value("22.22,")! Min[1.1754944e-38] Max[3.4028235e+38]
 [ERROR  ][...] -- Field "__root__:obj2:inner_obj:float" has an invalid float value("asdasdasd")! Min[1.1754944e-38] Max[3.4028235e+38]
 [ERROR  ][...] -- Array field "__root__:obj2:inner_obj" elements count must be in [min=1, max=4294967295]!
+[ERROR  ][...] -- Enum field "__root__:enum" has invalid value("asd")!
+        Allowed values:
+                EMyNonClassEnum_Value1
+                EMyNonClassEnum_Value2
+                EMyNonClassEnum_Value3
+                EMyNonClassEnum_MAX
+Invalid enum field value!
 Failed to load config from workbench.json!
 ```
 - Here the **`__root__`** represents the json root unnamed object ```{ ... }```.

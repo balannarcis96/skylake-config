@@ -8,6 +8,8 @@
     },
     "str3": "--str3--",
     "bool": "TRUE",
+    "enum": "EMyNonClassEnum_Value3",
+    "enum2": "MAX",
     "ip_addr": "192.168.0.1",
     "ip_addr2": "192.168.0.4",
     "field_prim_list": [

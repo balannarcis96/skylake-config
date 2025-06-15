@@ -41,6 +41,9 @@ concept CNumericValueFieldType = CIntegerValueFieldType<_Field>
                               || __is_same(_Field, double);
 
 template <typename _Field>
+concept CEnumValueFieldType = __is_enum(_Field);
+
+template <typename _Field>
 concept CBooleanValueFieldType = CIntegerValueFieldType<_Field>
                               || __is_same(_Field, bool);
 
@@ -60,7 +63,8 @@ concept CStringValueFieldType = __is_same(_Field, std::string)
 
 template <typename _Field>
 concept CPrimitiveValueFieldType = CNumericValueFieldType<_Field>
-                                || CStringValueFieldType<_Field>;
+                                || CStringValueFieldType<_Field>
+                                || CEnumValueFieldType<_Field>;
 
 template <typename _Container>
 concept CATRPContainerType = __is_class(_Container)

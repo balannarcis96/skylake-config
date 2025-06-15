@@ -5,6 +5,20 @@
 
 using namespace skl;
 
+enum EMyNonClassEnum : i32 {
+    EMyNonClassEnum_Value1 = -1,
+    EMyNonClassEnum_Value2 = 0,
+    EMyNonClassEnum_Value3,
+    EMyNonClassEnum_MAX
+};
+
+enum class EMyEnum : i32 {
+    Value1 = -1,
+    Value2 = 0,
+    Value3,
+    MAX
+};
+
 struct Inner {
     float       field_float;
     std::string field_str;
@@ -28,6 +42,8 @@ struct MyConfigRoot {
     double                       field_double;
     ipv4_addr_t                  field_ip_addr;
     bool                         field_bool;
+    EMyNonClassEnum              field_enum;
+    EMyEnum                      field_class_enum;
     char                         field_str[256U];
     MyChildConfig                field_obj;
     MyChildConfig                field_obj2;
@@ -103,6 +119,12 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
     root.boolean("bool", &MyConfigRoot::field_bool)
         .interpret_str(true)
         .interpret_str_true_value("TRUE");
+
+    root.enumeration("enum", &MyConfigRoot::field_enum)
+        .required(true);
+
+    root.enumeration("enum2", &MyConfigRoot::field_class_enum)
+        .required(true);
 
     auto child_config = ConfigNode<MyChildConfig>();
 
