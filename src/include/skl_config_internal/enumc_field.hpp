@@ -151,16 +151,18 @@ public:
     //! \remark (Field& f_self, _Type f_value) static -> bool
     template <typename _Functor>
         requires(CEnumFieldConstraintFunctor<_Type, _Functor>)
-    void add_constraint() noexcept {
+    EnumField& add_constraint() noexcept {
         m_constraints.emplace_back(&_Functor::operator());
+        return *this;
     }
 
     //! Add custom constraint
     //! \remark (Field& f_self, _Type f_value) -> bool
     template <typename _Functor>
         requires(CEnumFieldConstraintFunctor<_Type, _Functor>)
-    void add_constraint(const _Functor& f_functor) noexcept {
+    EnumField& add_constraint(const _Functor& f_functor) noexcept {
         m_constraints.emplace_back(f_functor);
+        return *this;
     }
 
     //! Add custom constraint

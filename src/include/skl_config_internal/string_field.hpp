@@ -198,15 +198,17 @@ public:
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <CStringFieldConstraintFunctor _Functor>
-    void add_constraint(_Functor&& f_functor) noexcept {
+    StringField& add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
+        return *this;
     }
 
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <CStringFieldConstraintFunctor _Functor>
-    void add_constraint() noexcept {
+    StringField& add_constraint() noexcept {
         m_constraints.emplace_back(&_Functor::operator());
+        return *this;
     }
 
     void reset() override {

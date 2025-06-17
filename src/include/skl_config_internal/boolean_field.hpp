@@ -79,14 +79,16 @@ public:
 
     template <typename _Functor>
         requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
-    void add_constraint(_Functor&& f_functor) noexcept {
+    BooleanField& add_constraint(_Functor&& f_functor) noexcept {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
+        return *this;
     }
 
     template <typename _Functor>
         requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
-    void add_constraint() noexcept {
+    BooleanField& add_constraint() noexcept {
         m_constraints.emplace_back(&_Functor::operator());
+        return *this;
     }
 
     void reset() override {
