@@ -157,7 +157,7 @@ private:
             for (u64 i = 0ULL; i < field.size(); ++i) {
                 _ProxyType temp{};
                 m_entries[i].submit(temp);
-                temp.submit(m_entries[i], field.back());
+                temp.submit(m_entries[i], field[i]);
             }
         } else {
             if (m_entries.size() > field.capacity()) {
