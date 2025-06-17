@@ -121,9 +121,12 @@ ConfigNode<MyConfigRoot>& example_get_config_loader() noexcept {
         .interpret_str_true_value("TRUE");
 
     root.enumeration("enum", &MyConfigRoot::field_enum)
+        .exclude(EMyNonClassEnum::EMyNonClassEnum_Value1)
+        .exclude(EMyNonClassEnum::EMyNonClassEnum_MAX)
         .required(true);
 
     root.enumeration("enum2", &MyConfigRoot::field_class_enum)
+        .max(EMyEnum::MAX)
         .required(true);
 
     auto child_config = ConfigNode<MyChildConfig>();

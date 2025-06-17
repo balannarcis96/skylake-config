@@ -5,6 +5,8 @@
 //!
 #pragma once
 
+#include <algorithm>
+
 #include <skl_log>
 #include <skl_magic_enum>
 
@@ -147,6 +149,68 @@ public:
         return *this;
     }
 
+    //! Add excluded enum value
+    EnumField& exclude(_Type f_enum_value_to_exclude) noexcept {
+        if (m_excluded_values.end() != std::find(m_excluded_values.begin(), m_excluded_values.end(), static_cast<underlying_t>(f_enum_value_to_exclude))) {
+            return *this;
+        }
+
+        m_excluded_values.push_back(static_cast<underlying_t>(f_enum_value_to_exclude));
+
+        return *this;
+    }
+
+    //! Add allowed enum value
+    EnumField& allowed(_Type f_enum_value_to_allow) noexcept {
+        if (m_allowed_values.end() != std::find(m_allowed_values.begin(), m_allowed_values.end(), static_cast<underlying_t>(f_enum_value_to_allow))) {
+            return *this;
+        }
+
+        m_allowed_values.push_back(static_cast<underlying_t>(f_enum_value_to_allow));
+
+        return *this;
+    }
+
+    //! Set minimum accepted enum value
+    EnumField& min(_Type f_min_enum) {
+        if (m_min.has_value()) {
+            SERROR_LOCAL_T("min(...) was already called on this enumeration field \"{}\"!", this->path_name().c_str());
+            throw std::runtime_error("min(...) was already called on this enumeration field!");
+        }
+
+        if (m_max.has_value() && (static_cast<underlying_t>(f_min_enum) >= m_max.value())) {
+            SERROR_LOCAL_T("min({}) cannot be higher or equal to prev max({}) value! Enumeration field \"{}\"!",
+                           static_cast<underlying_t>(f_min_enum),
+                           m_max.value(),
+                           this->path_name().c_str());
+            throw std::runtime_error("min(...) value is bigger than or equal to prev max(...) value!");
+        }
+
+        m_min = static_cast<underlying_t>(f_min_enum);
+
+        return *this;
+    }
+
+    //! Set maximum accepted enum value
+    EnumField& max(_Type f_max_enum) {
+        if (m_max.has_value()) {
+            SERROR_LOCAL_T("max(...) was already called on this enumeration field \"{}\"!", this->path_name().c_str());
+            throw std::runtime_error("max(...) was already called on this enumeration field!");
+        }
+
+        if (m_min.has_value() && (static_cast<underlying_t>(f_max_enum) <= m_min.value())) {
+            SERROR_LOCAL_T("max({}) cannot be smaller or equal to prev min({}) value! Enumeration field \"{}\"!",
+                           static_cast<underlying_t>(f_max_enum),
+                           m_min.value(),
+                           this->path_name().c_str());
+            throw std::runtime_error("max(...) value is smaller than or equal to prev min(...) value!");
+        }
+
+        m_max = static_cast<underlying_t>(f_max_enum);
+
+        return *this;
+    }
+
     //! Add custom constraint
     //! \remark (Field& f_self, _Type f_value) static -> bool
     template <typename _Functor>
@@ -212,11 +276,7 @@ protected:
                         SERROR_LOCAL_T("Enum field \"{}\" has invalid value({})!",
                                        this->path_name().c_str(),
                                        src_json->dump().c_str());
-                        puts("\tAllowed values:");
-                        for (_Type value : magic_enum::enum_values<_Type>()) {
-                            printf("\t\t%s\n", magic_enum::enum_name(value).data());
-                        }
-
+                        print_allowed();
                         throw std::runtime_error("Invalid enum field value!");
                     }
 
@@ -264,19 +324,23 @@ protected:
         }
 
         if ((false == m_is_default) || m_validate_if_default || false == m_is_validation_only) {
-            if (false == magic_enum::enum_contains<_Type>(m_value.value())) {
-                SERROR_LOCAL_T("Invalid value({}) for enum field\"{}\"!", underlying_t(m_value.value()), this->path_name().c_str());
-                throw std::runtime_error("EnumField<T> Invalid default value");
+            if (false == is_valid_value(static_cast<underlying_t>(m_value.value()))) {
+                const auto enum_value_str = enum_to_string(m_value.value());
+                SERROR_LOCAL_T("Invalid value({}) for enum field \"{}\"!", enum_value_str, this->path_name().c_str());
+                print_allowed();
+                throw std::runtime_error("EnumField<T> Invalid value!");
             }
 
             //Run constraints
             for (const auto& constraint : m_constraints) {
                 if (false == constraint(*this, m_value.value())) {
                     if (m_is_default) {
-                        SERROR_LOCAL_T("[Constraint] Invalid default value({}) for enum field\"{}\"!", underlying_t(m_value.value()), this->path_name().c_str());
+                        SERROR_LOCAL_T("[Constraint] Invalid default value({}) for enum field \"{}\"!", underlying_t(m_value.value()), this->path_name().c_str());
+                        print_allowed();
                         throw std::runtime_error("EnumField<T> Invalid default value");
                     } else {
-                        SERROR_LOCAL_T("[Constraint] Invalid value({}) for enum field\"{}\"!", underlying_t(m_value.value()), this->path_name().c_str());
+                        SERROR_LOCAL_T("[Constraint] Invalid value({}) for enum field \"{}\"!", underlying_t(m_value.value()), this->path_name().c_str());
+                        print_allowed();
                         throw std::runtime_error("[Constraint] EnumField<T> Invalid value");
                     }
                 }
@@ -289,8 +353,8 @@ protected:
 
         if (m_pre_submit.has_value()) {
             if (false == m_pre_submit.value()(*this, m_value.value(), f_config)) {
-                SERROR_LOCAL_T("NumericFiled \"{}\" pre_submit handler failed!", this->path_name().c_str());
-                throw std::runtime_error("NumericFiled pre_submit handler failed!");
+                SERROR_LOCAL_T("Enum Filed \"{}\" pre_submit handler failed!", this->path_name().c_str());
+                throw std::runtime_error("Enum Filed pre_submit handler failed!");
             }
         }
 
@@ -313,13 +377,52 @@ protected:
         return std::make_unique<EnumField<_Type, _TargetConfig>>(*this);
     }
 
+    void print_allowed() {
+        puts("\tAllowed values:");
+        for (_Type value : magic_enum::enum_values<_Type>()) {
+            if (is_valid_value<false>(static_cast<underlying_t>(value))) {
+                printf("\t\t%s\n", magic_enum::enum_name(value).data());
+            }
+        }
+    }
+
+    template <bool _CheckIfValidEnumEntry = true>
+    bool is_valid_value(underlying_t f_value) noexcept {
+        if constexpr (_CheckIfValidEnumEntry) {
+            if (false == magic_enum::enum_contains<_Type>(m_value.value())) {
+                return false;
+            }
+        }
+
+        if ((m_min.has_value() && f_value < m_min.value())
+            || (m_max.has_value() && f_value > m_max.value())) {
+            return false;
+        }
+
+        if (m_excluded_values.end() != std::find(m_excluded_values.begin(), m_excluded_values.end(), f_value)) {
+            return false;
+        }
+
+        if (false == m_allowed_values.empty()) {
+            if (m_allowed_values.end() == std::find(m_allowed_values.begin(), m_allowed_values.end(), f_value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 private:
     std::optional<_Type>          m_value;
     std::optional<_Type>          m_default;
+    std::optional<underlying_t>   m_min;
+    std::optional<underlying_t>   m_max;
     std::optional<raw_parsert_t>  m_custom_raw_parser;
     std::optional<json_parsert_t> m_custom_json_parser;
     std::optional<post_load_t>    m_post_load;
     std::optional<pre_submit_t>   m_pre_submit;
+    std::vector<underlying_t>     m_excluded_values;
+    std::vector<underlying_t>     m_allowed_values;
     member_ptr_t                  m_member_ptr;
     constraints_t                 m_constraints;
     bool                          m_required{false};
