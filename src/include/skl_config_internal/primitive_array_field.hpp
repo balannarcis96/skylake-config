@@ -27,8 +27,9 @@ public:
     };
 
     template <typename _T>
-    struct field_selector_t<StringField<_T, field_value_proxy_t>> {
-        using type = StringField<_T, field_value_proxy_t>;
+        requires(CStringValueFieldType<_T>)
+    struct field_selector_t<_T, void> {
+        using type = StringField<_T, field_value_proxy_t, true>;
     };
 
     using member_ptr_t = _Container _TargetConfig::*;

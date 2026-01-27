@@ -53,7 +53,7 @@ public:
     //! Default "true"
     template <u32 _N>
         requires(_N > 1U)
-    BooleanField& interpret_str_true_value(const char (&f_true_str)[_N]) noexcept {
+    BooleanField& interpret_str_true_value(const char (&f_true_str)[_N]) {
         m_true_string = f_true_str;
         return *this;
     }
@@ -61,7 +61,7 @@ public:
     //! Default "false"
     template <u32 _N>
         requires(_N > 1U)
-    BooleanField& interpret_str_false_value(const char (&f_false_str)[_N]) noexcept {
+    BooleanField& interpret_str_false_value(const char (&f_false_str)[_N]) {
         m_false_string = f_false_str;
         return *this;
     }
@@ -79,14 +79,14 @@ public:
 
     template <typename _Functor>
         requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
-    BooleanField& add_constraint(_Functor&& f_functor) noexcept {
+    BooleanField& add_constraint(_Functor&& f_functor) {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
         return *this;
     }
 
     template <typename _Functor>
         requires(CBooleanFieldConstraintFunctor<_Type, _Functor>)
-    BooleanField& add_constraint() noexcept {
+    BooleanField& add_constraint() {
         m_constraints.emplace_back(&_Functor::operator());
         return *this;
     }
@@ -125,7 +125,7 @@ protected:
                 }
 
                 const auto temp = json.template get<double>();
-                m_value         = double(0) == temp;
+                m_value         = double(0) != temp;
             } else if (json.is_boolean()) {
                 m_value = json.template get<bool>();
             } else {

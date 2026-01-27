@@ -21,7 +21,8 @@ concept CStringFieldPostLoadFunctor = __is_class(_Functor)
 template <typename _Functor, typename _TargetConfig>
 concept CStringFieldPreSubmitFunctor = __is_class(_Functor)
                                     && std::is_invocable_r_v<bool, _Functor, Field&, std::string&, _TargetConfig&>;
-template <CStringValueFieldType _Type, CConfigTargetType _TargetConfig>
+
+template <CStringValueFieldType _Type, CConfigTargetType _TargetConfig, bool _PartOfArray = false>
 class StringField : public ConfigField<_TargetConfig> {
 public:
     using member_ptr_t  = _Type _TargetConfig::*;
@@ -164,7 +165,7 @@ public:
     //! Set post load handler
     //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <CStringFieldPostLoadFunctor _Functor>
-    StringField& post_load(_Functor&& f_functor) noexcept {
+    StringField& post_load(_Functor&& f_functor) {
         m_post_load = std::forward<_Functor>(f_functor);
         return *this;
     }
@@ -172,7 +173,7 @@ public:
     //! Set post load handler
     //! \remark (Field& f_self, const std::string& f_value) static -> bool
     template <CStringFieldPostLoadFunctor _Functor>
-    StringField& post_load() noexcept {
+    StringField& post_load() {
         m_post_load = &_Functor::operator();
         return *this;
     }
@@ -181,7 +182,7 @@ public:
     //! \remark (Field& f_self, std::string& f_value, _TargetConfig& f_config) -> bool
     template <typename _Functor>
         requires(CStringFieldPreSubmitFunctor<_Functor, _TargetConfig>)
-    StringField& pre_submit(_Functor&& f_functor) noexcept {
+    StringField& pre_submit(_Functor&& f_functor) {
         m_pre_submit = std::forward<_Functor>(f_functor);
         return *this;
     }
@@ -190,7 +191,7 @@ public:
     //! \remark (Field& f_self, std::string& f_value, _TargetConfig& f_config) -> bool
     template <typename _Functor>
         requires(CStringFieldPreSubmitFunctor<_Functor, _TargetConfig>)
-    StringField& pre_submit() noexcept {
+    StringField& pre_submit() {
         m_pre_submit = &_Functor::operator();
         return *this;
     }
@@ -198,7 +199,7 @@ public:
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <CStringFieldConstraintFunctor _Functor>
-    StringField& add_constraint(_Functor&& f_functor) noexcept {
+    StringField& add_constraint(_Functor&& f_functor) {
         m_constraints.emplace_back(std::forward<_Functor&&>(f_functor));
         return *this;
     }
@@ -206,7 +207,7 @@ public:
     //! Add custom constraint
     //! \remark (Field& f_self, const std::string& f_value) -> bool
     template <CStringFieldConstraintFunctor _Functor>
-    StringField& add_constraint() noexcept {
+    StringField& add_constraint() {
         m_constraints.emplace_back(&_Functor::operator());
         return *this;
     }
@@ -219,40 +220,46 @@ public:
 
 protected:
     void load(json& f_json) override {
-        const auto exists = f_json.contains(this->name());
-        if (exists) {
-            auto& json = f_json[this->name()];
-            if (json.is_string()) {
-                m_value = json.template get<std::string>();
-            } else {
-                if (m_dump_if_not_string) {
-                    m_value = json.dump();
-                } else {
-                    SERROR_LOCAL_T("Field \"{}\" must be a string field!", this->path_name().c_str());
-                    throw std::runtime_error("String field doesnt have a string value!");
-                }
-            }
-
-            if (m_post_load.has_value()) {
-                if (false == m_post_load.value()(*this, m_value.value())) {
-                    SERROR_LOCAL_T("Field \"{}\" failed post load!", this->path_name().c_str());
-                    throw std::runtime_error("String field failed post load!");
-                }
-            }
-
+        if constexpr (_PartOfArray) {
+            SKL_ASSERT(f_json.is_string());
+            m_value      = f_json.template get<std::string>();
             m_is_default = false;
         } else {
-            if (m_required) {
-                SERROR_LOCAL_T("String field \"{}\" is required!", this->path_name().c_str());
-                throw std::runtime_error("Missing required string field!");
-            }
+            const auto exists = f_json.contains(this->name());
+            if (exists) {
+                auto& json = f_json[this->name()];
+                if (json.is_string()) {
+                    m_value = json.template get<std::string>();
+                } else {
+                    if (m_dump_if_not_string) {
+                        m_value = json.dump();
+                    } else {
+                        SERROR_LOCAL_T("Field \"{}\" must be a string field!", this->path_name().c_str());
+                        throw std::runtime_error("String field doesnt have a string value!");
+                    }
+                }
 
-            if (m_default.has_value()) {
-                m_value      = m_default.value();
-                m_is_default = true;
+                if (m_post_load.has_value()) {
+                    if (false == m_post_load.value()(*this, m_value.value())) {
+                        SERROR_LOCAL_T("Field \"{}\" failed post load!", this->path_name().c_str());
+                        throw std::runtime_error("String field failed post load!");
+                    }
+                }
+
+                m_is_default = false;
             } else {
-                SERROR_LOCAL_T("Non required string field \"{}\" has no default value!", this->path_name().c_str());
-                throw std::runtime_error("Missing default value for required string field!");
+                if (m_required) {
+                    SERROR_LOCAL_T("String field \"{}\" is required!", this->path_name().c_str());
+                    throw std::runtime_error("Missing required string field!");
+                }
+
+                if (m_default.has_value()) {
+                    m_value      = m_default.value();
+                    m_is_default = true;
+                } else {
+                    SERROR_LOCAL_T("Non required string field \"{}\" has no default value!", this->path_name().c_str());
+                    throw std::runtime_error("Missing default value for required string field!");
+                }
             }
         }
 
@@ -326,7 +333,7 @@ protected:
     }
 
     std::unique_ptr<ConfigField<_TargetConfig>> clone() override {
-        return std::make_unique<StringField<_Type, _TargetConfig>>(*this);
+        return std::make_unique<StringField<_Type, _TargetConfig, _PartOfArray>>(*this);
     }
 
 private:
