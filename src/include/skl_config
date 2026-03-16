@@ -20,6 +20,7 @@
 #include "skl_config_internal/boolean_field.hpp"
 #include "skl_config_internal/string_field.hpp"
 #include "skl_config_internal/primitive_array_field.hpp"
+#include "skl_config_internal/c_array_field.hpp"
 #include "skl_config_internal/array_field.hpp"
 #include "skl_config_internal/array_proxy_field.hpp"
 #include "skl_config_internal/object_field.hpp"
@@ -324,6 +325,57 @@ public:
     config::PrimitiveArrayField<_Type, _TargetConfig, _Container>& array_raw(const char (&f_field_name)[_N],
                                                                              config::PrimitiveArrayField<_Type, _TargetConfig, _Container>::member_ptr_t f_member_ptr) {
         return array_raw<_Type, _Container>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
+    /*=== c_array[Primitive] ===*/
+
+    template <config::CPrimitiveValueFieldType _Type, u32 _ArraySize>
+    config::CArrayField<_Type, _ArraySize, _TargetConfig>& c_array(skl_string_view                                                       f_field_name,
+                                                                    config::CArrayField<_Type, _ArraySize, _TargetConfig>::member_ptr_t f_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::CArrayField<_Type, _ArraySize, _TargetConfig>>(this, f_field_name.std<std::string_view>(), f_member_ptr));
+        return static_cast<config::CArrayField<_Type, _ArraySize, _TargetConfig>&>(*m_fields.back());
+    }
+
+    template <config::CPrimitiveValueFieldType _Type, u32 _ArraySize, u32 _N>
+        requires(_N > 1U)
+    config::CArrayField<_Type, _ArraySize, _TargetConfig>& c_array(const char (&f_field_name)[_N],
+                                                                    config::CArrayField<_Type, _ArraySize, _TargetConfig>::member_ptr_t f_member_ptr) {
+        return c_array<_Type, _ArraySize>(skl_string_view::exact_cstr(f_field_name), f_member_ptr);
+    }
+
+    /*=== c_array_count[Primitive] (with count member) ===*/
+
+    template <config::CPrimitiveValueFieldType _Type, u32 _ArraySize, config::CIntegerValueFieldType _CountType>
+    config::CArrayCountField<_Type, _ArraySize, _TargetConfig, _CountType>& c_array_count(
+        skl_string_view                                                                    f_field_name,
+        typename config::CArrayField<_Type, _ArraySize, _TargetConfig>::member_ptr_t       f_member_ptr,
+        _CountType _TargetConfig::*                                                        f_count_member_ptr) {
+        for (const auto& field : m_fields) {
+            if (field->name() == f_field_name.std<std::string_view>()) {
+                SERROR_LOCAL_T("Field \"{}\" was already registered!", f_field_name);
+                throw std::runtime_error("Duplicate value field registration");
+            }
+        }
+
+        m_fields.emplace_back(std::make_unique<config::CArrayCountField<_Type, _ArraySize, _TargetConfig, _CountType>>(
+            this, f_field_name.std<std::string_view>(), f_member_ptr, f_count_member_ptr));
+        return static_cast<config::CArrayCountField<_Type, _ArraySize, _TargetConfig, _CountType>&>(*m_fields.back());
+    }
+
+    template <config::CPrimitiveValueFieldType _Type, u32 _ArraySize, config::CIntegerValueFieldType _CountType, u32 _N>
+        requires(_N > 1U)
+    config::CArrayCountField<_Type, _ArraySize, _TargetConfig, _CountType>& c_array_count(
+        const char (&f_field_name)[_N],
+        typename config::CArrayField<_Type, _ArraySize, _TargetConfig>::member_ptr_t f_member_ptr,
+        _CountType _TargetConfig::*                                                  f_count_member_ptr) {
+        return c_array_count<_Type, _ArraySize, _CountType>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, f_count_member_ptr);
     }
 
     void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {

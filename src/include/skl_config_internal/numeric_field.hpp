@@ -368,6 +368,12 @@ private:
 
     template <CPrimitiveValueFieldType, CConfigTargetType, config::CContainerType>
     friend class PrimitiveArrayField;
+
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType>
+    friend class CArrayField;
+
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType, CIntegerValueFieldType>
+    friend class CArrayCountField;
 };
 } // namespace skl::config
 

@@ -60,6 +60,12 @@ protected:
         m_parent = &f_new_parent;
     }
 
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType>
+    friend class CArrayField;
+
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType, CIntegerValueFieldType>
+    friend class CArrayCountField;
+
 protected:
     std::string m_name;
     Field*      m_parent;
@@ -97,5 +103,17 @@ protected:
     virtual std::unique_ptr<ConfigField<_TargetConfig>> clone() = 0;
 
     friend ConfigNode<_TargetConfig>;
+
+    template <CConfigTargetType, CConfigTargetType, CContainerType>
+    friend class ArrayField;
+
+    template <CPrimitiveValueFieldType, CConfigTargetType, CContainerType>
+    friend class PrimitiveArrayField;
+
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType>
+    friend class CArrayField;
+
+    template <CPrimitiveValueFieldType, u32, CConfigTargetType, CIntegerValueFieldType>
+    friend class CArrayCountField;
 };
 } // namespace skl::config
