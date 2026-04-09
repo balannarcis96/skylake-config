@@ -451,7 +451,10 @@ private:
             throw std::runtime_error("File open failed");
         }
 
-        json j = json::parse(file);
+        json j = json::parse(file,
+            /* callback */ nullptr,
+            /* allow_exceptions */ true,
+            /* ignore_comments */ true);
         load(j);
     }
 

@@ -118,6 +118,7 @@ private:
         }
     }
 
+protected:
     //! Submit valid values into given config object
     void submit(_TargetConfig& f_config) override {
         auto& field = f_config.*m_member_ptr;
@@ -139,6 +140,7 @@ private:
         }
     }
 
+private:
     void load_value_from_default_object(const _TargetConfig& f_config) override {
         const auto& field = f_config.*m_member_ptr;
 
