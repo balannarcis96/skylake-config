@@ -378,9 +378,22 @@ public:
         return c_array_count<_Type, _ArraySize, _CountType>(skl_string_view::exact_cstr(f_field_name), f_member_ptr, f_count_member_ptr);
     }
 
-    void load_validate_and_submit(skl_string_view f_file, _TargetConfig& f_out_config) {
+    //! Default no-op preprocessor (used when caller doesn't supply one).
+    struct null_json_preprocessor_t {
+        void operator()(json&) const noexcept {}
+    };
+
+    //! Load + validate + submit, with optional in-memory JSON preprocessing.
+    //! \param f_preprocessor Callable invoked as `void(json&)` AFTER the JSON file is parsed
+    //!                       and BEFORE individual fields are loaded. Defaults to a no-op.
+    //!                       Use this to expand prototypes, resolve includes, or otherwise
+    //!                       transform the raw JSON before schema-driven loading.
+    template <typename _Preprocessor = null_json_preprocessor_t>
+    void load_validate_and_submit(skl_string_view f_file,
+                                  _TargetConfig&  f_out_config,
+                                  _Preprocessor   f_preprocessor = {}) {
         reset();
-        load_from_file(f_file);
+        load_from_file(f_file, f_preprocessor);
         validate();
         submit(f_out_config);
     }
@@ -432,7 +445,8 @@ private:
         }
     }
 
-    void load_from_file(skl_string_view f_json_file) {
+    template <typename _Preprocessor = null_json_preprocessor_t>
+    void load_from_file(skl_string_view f_json_file, _Preprocessor f_preprocessor = {}) {
         if (false == std::filesystem::exists(f_json_file.std<std::string_view>())) {
             SERROR_LOCAL_T("File \"{}\" does not exist!", f_json_file);
             throw std::runtime_error("File doesn't exists");
@@ -455,6 +469,10 @@ private:
             /* callback */ nullptr,
             /* allow_exceptions */ true,
             /* ignore_comments */ true);
+
+        // Optional in-memory preprocessing (no-op default is inlined away)
+        f_preprocessor(j);
+
         load(j);
     }
 
